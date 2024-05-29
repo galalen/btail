@@ -5,39 +5,55 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"time"
 )
 
-func Tail(filename string, lines int, follow bool) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
+type TailConfig struct {
+	Filename string
+	Lines    int
+	Follow   bool
+}
 
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to get file info: %w", err)
-	}
-	fileSize := fileInfo.Size()
+type TailResponse struct {
+	Lines chan string
+}
 
-	result, offset, err := readLastNLines(file, fileSize, lines)
-	if err != nil {
-		return err
-	}
+func Tail(config TailConfig) (TailResponse, error) {
+	res := TailResponse{make(chan string)}
 
-	for _, line := range result {
-		fmt.Println(prettify(line))
-	}
+	go func() {
+		defer close(res.Lines)
 
-	if follow {
-		if err := followFile(file, offset); err != nil {
-			return err
+		file, err := os.Open(config.Filename)
+		if err != nil {
+			log.Fatalf("failed to open file: %v", err)
 		}
-	}
+		defer file.Close()
 
-	return nil
+		fileInfo, err := file.Stat()
+		if err != nil {
+			log.Fatalf("failed to get file info: %v", err)
+		}
+		fileSize := fileInfo.Size()
+
+		lines, offset, err := readLastNLines(file, fileSize, config.Lines)
+		if err != nil {
+			log.Fatalf("failed to read lines from file: %v", err)
+		}
+
+		for _, line := range lines {
+			res.Lines <- line
+		}
+
+		if config.Follow {
+			if err := followFile(file, offset, res.Lines); err != nil {
+				log.Fatalf("failed to follow file: %v", err)
+			}
+		}
+	}()
+	return res, nil
 }
 
 func readLastNLines(file *os.File, fileSize int64, lines int) ([]string, int64, error) {
@@ -51,6 +67,7 @@ func readLastNLines(file *os.File, fileSize int64, lines int) ([]string, int64, 
 		if offset+chunkSize > fileSize {
 			chunkSize = fileSize - offset
 		}
+
 		offset += chunkSize
 		file.Seek(-offset, io.SeekEnd)
 		chunk := make([]byte, chunkSize)
@@ -82,7 +99,7 @@ func readLastNLines(file *os.File, fileSize int64, lines int) ([]string, int64, 
 	return result, fileSize - offset, nil
 }
 
-func followFile(file *os.File, offset int64) error {
+func followFile(file *os.File, offset int64, lines chan<- string) error {
 	for {
 		_, err := file.Seek(offset, 0)
 		if err != nil {
@@ -95,7 +112,7 @@ func followFile(file *os.File, offset int64) error {
 			if err != nil {
 				break
 			}
-			fmt.Println(prettify(line))
+			lines <- line
 			offset += int64(len(line))
 		}
 		time.Sleep(1 * time.Second)
@@ -114,8 +131,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := Tail(*filename, *lines, *follow); err != nil {
+	config := TailConfig{
+		Filename: *filename,
+		Lines:    *lines,
+		Follow:   *follow,
+	}
+
+	res, err := Tail(config)
+	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
+	}
+
+	for line := range res.Lines {
+		fmt.Println(prettify(line))
 	}
 }
