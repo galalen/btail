@@ -76,13 +76,13 @@ func appUI(config Config) {
 
 	// Footer TextView
 	footerInfo := tview.NewTextView()
-	footerInfo.SetText("\tSearch (F) | Quit (Q) | Exit (ESC) | UP (↑) | Down (↓)")
+	footerInfo.SetText("\tSearch (Ctrl+F) | Quit (Ctrl+Q) | Exit (ESC) | UP (↑) | Down (↓)")
 	footerInfo.SetTextAlign(tview.AlignCenter)
 	footerInfo.SetDynamicColors(true)
 	footerInfo.SetBackgroundColor(tcell.ColorRebeccaPurple)
 
 	footerInput := tview.NewInputField()
-	footerInput.SetPlaceholder("(F) Search 🔍")
+	footerInput.SetPlaceholder("(Ctrl+F) Search 🔍")
 	footerInput.SetFieldTextColor(tcell.ColorWhite)
 	footerInput.SetPlaceholderTextColor(tcell.ColorWhite)
 	footerInput.SetFieldTextColor(tcell.ColorWhite)
