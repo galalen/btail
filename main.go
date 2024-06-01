@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func runWithoutUI(config TailConfig) {
+func runWithoutUI(config Config) {
 	res, err := Tail(config)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
@@ -30,7 +30,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	config := TailConfig{
+	config := Config{
 		Filename: *filename,
 		Lines:    *lines,
 		Follow:   *follow,

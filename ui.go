@@ -10,7 +10,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-func appUI(config TailConfig) {
+func appUI(config Config) {
 	app := tview.NewApplication()
 
 	pattern := []string{"Timestamp", "Level", "Message"}

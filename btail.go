@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type TailConfig struct {
+type Config struct {
 	Filename string
 	Lines    int
 	Follow   bool
@@ -19,7 +19,7 @@ type TailResponse struct {
 	Lines chan string
 }
 
-func Tail(config TailConfig) (TailResponse, error) {
+func Tail(config Config) (TailResponse, error) {
 	res := TailResponse{make(chan string)}
 
 	go func() {
