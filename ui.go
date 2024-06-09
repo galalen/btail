@@ -52,7 +52,7 @@ func appUI(config Config) {
 			level := strings.TrimSpace(msg[0])
 			message := strings.TrimSpace(msg[1])
 
-			table.SetCell(row, 0, tview.NewTableCell(time.Now().Format(time.RFC3339)).
+			table.SetCell(row, 0, tview.NewTableCell(line.Time.Format(time.RFC3339)).
 				SetTextColor(tcell.ColorGreenYellow).
 				SetAlign(tview.AlignLeft).
 				SetExpansion(2))
