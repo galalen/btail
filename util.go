@@ -37,3 +37,8 @@ func prettify(line string) string {
 
 	return highlightedLine
 }
+
+var patterns = [][]string{
+	{"Timestamp", "Level", "Message"},
+	{"Timestamp", "Message"},
+}

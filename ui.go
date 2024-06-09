@@ -13,7 +13,6 @@ import (
 func appUI(config Config) {
 	app := tview.NewApplication()
 
-	pattern := []string{"Timestamp", "Level", "Message"}
 	expansions := []int{2, 2, 6}
 
 	header := tview.NewTextView().
@@ -26,7 +25,7 @@ func appUI(config Config) {
 		SetFixed(1, 2).
 		SetSelectable(true, false)
 
-	for i, text := range pattern {
+	for i, text := range patterns[0] {
 		if i%2 == 0 {
 			table.SetCell(0, i, tview.NewTableCell(text).
 				SetTextColor(tcell.ColorYellow).
@@ -40,7 +39,7 @@ func appUI(config Config) {
 		}
 	}
 
-	res, err := Tail(config)
+	res, err := TailFile(config)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
@@ -49,7 +48,7 @@ func appUI(config Config) {
 	go func() {
 		row := 1
 		for line := range res.Lines {
-			msg := strings.Split(line, "|")
+			msg := strings.Split(line.Text, "|")
 			level := strings.TrimSpace(msg[0])
 			message := strings.TrimSpace(msg[1])
 

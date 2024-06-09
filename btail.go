@@ -15,12 +15,21 @@ type Config struct {
 	Follow   bool
 }
 
-type TailResponse struct {
-	Lines chan string
+type Tail struct {
+	Filename string
+	Lines    chan Line
 }
 
-func Tail(config Config) (TailResponse, error) {
-	res := TailResponse{make(chan string)}
+type Line struct {
+	Text string
+	Time time.Time
+}
+
+func TailFile(config Config) (Tail, error) {
+	res := Tail{
+		Filename: config.Filename,
+		Lines:    make(chan Line),
+	}
 
 	go func() {
 		defer close(res.Lines)
@@ -55,11 +64,11 @@ func Tail(config Config) (TailResponse, error) {
 	return res, nil
 }
 
-func readLastNLines(file *os.File, fileSize int64, lines int) ([]string, int64, error) {
+func readLastNLines(file *os.File, fileSize int64, lines int) ([]Line, int64, error) {
 	var lineCount int
 	var offset int64 = 0
 	chunkSize := int64(4096)
-	var result []string
+	var result []Line
 	var lineBuffer []byte
 
 	for lineCount < lines && offset < fileSize {
@@ -79,7 +88,7 @@ func readLastNLines(file *os.File, fileSize int64, lines int) ([]string, int64, 
 			if chunk[i] == '\n' {
 				if len(lineBuffer) > 0 {
 					lineCount++
-					result = append([]string{string(lineBuffer)}, result...)
+					result = append([]Line{{string(lineBuffer), time.Now()}}, result...)
 					lineBuffer = nil
 				}
 				if lineCount == lines {
@@ -92,13 +101,13 @@ func readLastNLines(file *os.File, fileSize int64, lines int) ([]string, int64, 
 	}
 
 	if lineCount < lines && len(lineBuffer) > 0 {
-		result = append([]string{string(lineBuffer)}, result...)
+		result = append([]Line{{string(lineBuffer), time.Now()}}, result...)
 	}
 
 	return result, fileSize - offset, nil
 }
 
-func followFile(file *os.File, offset int64, lines chan<- string) error {
+func followFile(file *os.File, offset int64, lines chan<- Line) error {
 	for {
 		_, err := file.Seek(offset, 0)
 		if err != nil {
@@ -111,7 +120,7 @@ func followFile(file *os.File, offset int64, lines chan<- string) error {
 			if err != nil {
 				break
 			}
-			lines <- line
+			lines <- Line{line, time.Now()}
 			offset += int64(len(line))
 		}
 		time.Sleep(1 * time.Second)

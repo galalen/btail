@@ -7,14 +7,14 @@ import (
 )
 
 func runWithoutUI(config Config) {
-	res, err := Tail(config)
+	res, err := TailFile(config)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
 	}
 
 	for line := range res.Lines {
-		fmt.Println(prettify(line))
+		fmt.Println(prettify(line.Text))
 	}
 }
 
