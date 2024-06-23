@@ -26,13 +26,13 @@ type Line struct {
 }
 
 func TailFile(config Config) (Tail, error) {
-	res := Tail{
+	tail := Tail{
 		Filename: config.Filename,
 		Lines:    make(chan Line),
 	}
 
 	go func() {
-		defer close(res.Lines)
+		defer close(tail.Lines)
 
 		file, err := os.Open(config.Filename)
 		if err != nil {
@@ -52,16 +52,16 @@ func TailFile(config Config) (Tail, error) {
 		}
 
 		for _, line := range lines {
-			res.Lines <- line
+			tail.Lines <- line
 		}
 
 		if config.Follow {
-			if err := followFile(file, offset, res.Lines); err != nil {
+			if err := followFile(file, offset, tail.Lines); err != nil {
 				log.Fatalf("failed to follow file: %v", err)
 			}
 		}
 	}()
-	return res, nil
+	return tail, nil
 }
 
 func readLastNLines(file *os.File, fileSize int64, lines int) ([]Line, int64, error) {

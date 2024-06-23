@@ -6,14 +6,8 @@ import (
 	"os"
 )
 
-func runWithoutUI(config Config) {
-	res, err := TailFile(config)
-	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
-
-	for line := range res.Lines {
+func runWithoutUI(tail Tail) {
+	for line := range tail.Lines {
 		fmt.Println(prettify(line.Text))
 	}
 }
@@ -36,6 +30,12 @@ func main() {
 		Follow:   *follow,
 	}
 
-	//runWithoutUI(config)
-	appUI(config)
+	tail, err := TailFile(config)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		os.Exit(1)
+	}
+
+	//runWithoutUI(tail)
+	appUI(tail)
 }

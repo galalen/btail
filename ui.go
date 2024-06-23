@@ -1,19 +1,14 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-func appUI(config Config) {
+func appUI(tail Tail) {
 	app := tview.NewApplication()
-
-	expansions := []int{2, 2, 6}
 
 	header := tview.NewTextView().
 		SetText("btail 🐝").
@@ -25,45 +20,25 @@ func appUI(config Config) {
 		SetFixed(1, 2).
 		SetSelectable(true, false)
 
-	for i, text := range patterns[0] {
-		if i%2 == 0 {
-			table.SetCell(0, i, tview.NewTableCell(text).
-				SetTextColor(tcell.ColorYellow).
-				SetAlign(tview.AlignLeft).
-				SetExpansion(expansions[i]))
-		} else {
-			table.SetCell(0, i, tview.NewTableCell(text).
-				SetTextColor(tcell.ColorRed).
-				SetAlign(tview.AlignLeft).
-				SetExpansion(expansions[i]))
-		}
-	}
-
-	res, err := TailFile(config)
-	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+	table.SetCell(0, 0, tview.NewTableCell("Timestamp").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(1))
+	table.SetCell(0, 1, tview.NewTableCell("Message").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(9))
 
 	go func() {
 		row := 1
-		for line := range res.Lines {
-			msg := strings.Split(line.Text, "|")
-			level := strings.TrimSpace(msg[0])
-			message := strings.TrimSpace(msg[1])
-
+		for line := range tail.Lines {
 			table.SetCell(row, 0, tview.NewTableCell(line.Time.Format(time.RFC3339)).
-				SetTextColor(tcell.ColorGreenYellow).
+				SetTextColor(tcell.ColorLightGoldenrodYellow).
 				SetAlign(tview.AlignLeft).
-				SetExpansion(2))
+				SetExpansion(1))
 
-			table.SetCell(row, 1, tview.NewTableCell(level).
-				SetTextColor(tcell.ColorRed).
-				SetAlign(tview.AlignLeft).
-				SetExpansion(2))
-
-			table.SetCell(row, 2, tview.NewTableCell(message).
-				SetTextColor(tcell.ColorGreenYellow).
+			table.SetCell(row, 1, tview.NewTableCell(line.Text).
+				SetTextColor(tcell.ColorLimeGreen).
 				SetAlign(tview.AlignLeft).
 				SetExpansion(2))
 			row++
