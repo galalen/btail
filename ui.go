@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -10,6 +13,9 @@ import (
 func appUI(tail Tail) {
 	app := tview.NewApplication()
 
+	var bufferedLines []Line
+	var isSearchUsed bool
+
 	header := tview.NewTextView().
 		SetText("btail 🐝").
 		SetTextAlign(tview.AlignCenter).
@@ -17,30 +23,123 @@ func appUI(tail Tail) {
 
 	table := tview.NewTable().
 		SetBorders(false).
-		SetFixed(1, 2).
-		SetSelectable(true, false)
+		SetFixed(1, 3).
+		SetSelectable(true, false).
+		ScrollToEnd()
 
-	table.SetCell(0, 0, tview.NewTableCell("Timestamp").
+	table.SetCell(0, 0, tview.NewTableCell("No.").
 		SetTextColor(tcell.ColorWhite).
 		SetAlign(tview.AlignLeft).
 		SetExpansion(1))
-	table.SetCell(0, 1, tview.NewTableCell("Message").
+
+	table.SetCell(0, 1, tview.NewTableCell("Timestamp").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(1))
+
+	table.SetCell(0, 2, tview.NewTableCell("Message").
 		SetTextColor(tcell.ColorWhite).
 		SetAlign(tview.AlignLeft).
 		SetExpansion(9))
 
+	clearTable := func() {
+		table.Clear()
+
+		table.SetCell(0, 0, tview.NewTableCell("No.").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(1))
+
+		table.SetCell(0, 1, tview.NewTableCell("Timestamp").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(1))
+
+		table.SetCell(0, 2, tview.NewTableCell("Message").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(9))
+
+	}
+
+	highlightKeyword := func(text, keyword string) string {
+		return strings.ReplaceAll(text, keyword, fmt.Sprintf("[red]%s[#32CD32]", keyword))
+	}
+
+	showBufferedLines := func(keyword string) {
+		clearTable()
+		row := table.GetRowCount()
+		if len(keyword) > 0 {
+			for _, line := range bufferedLines {
+				if strings.Contains(line.Text, keyword) {
+					highlightedText := highlightKeyword(line.Text, keyword)
+
+					table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
+						SetTextColor(tcell.ColorWhite).
+						SetAlign(tview.AlignLeft).
+						SetExpansion(1))
+
+					table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
+						SetTextColor(tcell.ColorLightGoldenrodYellow).
+						SetAlign(tview.AlignLeft).
+						SetExpansion(1))
+
+					table.SetCell(row, 2, tview.NewTableCell(highlightedText).
+						SetTextColor(tcell.ColorLimeGreen).
+						SetAlign(tview.AlignLeft).
+						SetExpansion(2))
+					row++
+				}
+			}
+			isSearchUsed = true
+		} else {
+			// TODO: take the count when search used,
+			// 	consider tail.Lines b/c data will be appended to both ch and bufferedLines
+			for _, line := range bufferedLines {
+				table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
+					SetTextColor(tcell.ColorWhite).
+					SetAlign(tview.AlignLeft).
+					SetExpansion(1))
+
+				table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
+					SetTextColor(tcell.ColorLightGoldenrodYellow).
+					SetAlign(tview.AlignLeft).
+					SetExpansion(1))
+
+				table.SetCell(row, 2, tview.NewTableCell(line.Text).
+					SetTextColor(tcell.ColorLimeGreen).
+					SetAlign(tview.AlignLeft).
+					SetExpansion(2))
+				row++
+			}
+			isSearchUsed = false
+		}
+		table.ScrollToEnd()
+		table.Select(row, 1)
+	}
+
+	// main populate
 	go func() {
-		row := 1
+		row := table.GetRowCount()
 		for line := range tail.Lines {
-			table.SetCell(row, 0, tview.NewTableCell(line.Time.Format(time.RFC3339)).
+			bufferedLines = append(bufferedLines, line)
+
+			table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
+				SetTextColor(tcell.ColorWhite).
+				SetAlign(tview.AlignLeft).
+				SetExpansion(1))
+
+			table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
 				SetTextColor(tcell.ColorLightGoldenrodYellow).
 				SetAlign(tview.AlignLeft).
 				SetExpansion(1))
 
-			table.SetCell(row, 1, tview.NewTableCell(line.Text).
+			table.SetCell(row, 2, tview.NewTableCell(line.Text).
 				SetTextColor(tcell.ColorLimeGreen).
 				SetAlign(tview.AlignLeft).
 				SetExpansion(2))
+			table.ScrollToEnd()
+			table.Select(row, 1)
 			row++
 		}
 	}()
@@ -61,6 +160,14 @@ func appUI(tail Tail) {
 	footerInput.SetPlaceholderTextColor(tcell.ColorWhite)
 	footerInput.SetFieldTextColor(tcell.ColorWhite)
 	footerInput.SetBackgroundColor(tcell.ColorRebeccaPurple)
+	footerInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			keyword := footerInput.GetText()
+			if len(keyword) > 0 {
+				showBufferedLines(keyword)
+			}
+		}
+	})
 
 	footer := tview.NewFlex().
 		AddItem(footerInput, 0, 5, true).
@@ -83,6 +190,9 @@ func appUI(tail Tail) {
 		case tcell.KeyEsc:
 			app.SetFocus(table)
 			footerInput.SetText("")
+			if isSearchUsed {
+				showBufferedLines("")
+			}
 			return nil
 		default:
 			// ignored
