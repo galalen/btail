@@ -106,7 +106,7 @@ func appUI(tail Tail) {
 					SetAlign(tview.AlignLeft).
 					SetExpansion(1))
 
-				table.SetCell(row, 2, tview.NewTableCell(line.Text).
+				table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
 					SetTextColor(tcell.ColorLimeGreen).
 					SetAlign(tview.AlignLeft).
 					SetExpansion(2))
@@ -134,7 +134,7 @@ func appUI(tail Tail) {
 				SetAlign(tview.AlignLeft).
 				SetExpansion(1))
 
-			table.SetCell(row, 2, tview.NewTableCell(line.Text).
+			table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
 				SetTextColor(tcell.ColorLimeGreen).
 				SetAlign(tview.AlignLeft).
 				SetExpansion(2))

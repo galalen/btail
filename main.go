@@ -4,11 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 )
 
 func runWithoutUI(tail Tail) {
+	rowCount := 1
 	for line := range tail.Lines {
-		fmt.Println(prettify(line.Text))
+		timestamp := line.Time.Format(time.RFC3339)
+		fmt.Println(fmt.Sprintf("[%d] %s - %s", rowCount, timestamp, line.Text))
+
+		rowCount++
 	}
 }
 
