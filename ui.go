@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -10,16 +9,60 @@ import (
 	"github.com/rivo/tview"
 )
 
+func setupColumns(table *tview.Table) {
+	table.SetCell(0, 0, tview.NewTableCell("No.").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetStyle(tcell.StyleDefault.Bold(true)).
+		SetExpansion(1))
+
+	table.SetCell(0, 1, tview.NewTableCell("Timestamp").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetStyle(tcell.StyleDefault.Bold(true)).
+		SetExpansion(1))
+
+	table.SetCell(0, 2, tview.NewTableCell("Message").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetStyle(tcell.StyleDefault.Bold(true)).
+		SetExpansion(9))
+}
+
+func clearTable(table *tview.Table) {
+	table.Clear()
+	setupColumns(table)
+}
+
+func renderRow(table *tview.Table, row int, line Line, newTextMsg string) {
+	table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(1))
+
+	table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(1))
+
+	if newTextMsg != "" {
+		table.SetCell(row, 2, tview.NewTableCell(newTextMsg).
+			SetTextColor(tcell.ColorLightGreen).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(2))
+	} else {
+		table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
+			SetTextColor(tcell.ColorLightGreen).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(2))
+	}
+}
+
 func appUI(tail Tail) {
 	app := tview.NewApplication()
 
 	var bufferedLines []Line
 	var isSearchUsed bool
-
-	header := tview.NewTextView().
-		SetText("btail 🐝").
-		SetTextAlign(tview.AlignCenter).
-		SetDynamicColors(true)
 
 	table := tview.NewTable().
 		SetBorders(false).
@@ -27,67 +70,16 @@ func appUI(tail Tail) {
 		SetSelectable(true, false).
 		ScrollToEnd()
 
-	table.SetCell(0, 0, tview.NewTableCell("No.").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(1))
-
-	table.SetCell(0, 1, tview.NewTableCell("Timestamp").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(1))
-
-	table.SetCell(0, 2, tview.NewTableCell("Message").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(9))
-
-	clearTable := func() {
-		table.Clear()
-
-		table.SetCell(0, 0, tview.NewTableCell("No.").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(1))
-
-		table.SetCell(0, 1, tview.NewTableCell("Timestamp").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(1))
-
-		table.SetCell(0, 2, tview.NewTableCell("Message").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(9))
-
-	}
-
-	highlightKeyword := func(text, keyword string) string {
-		return strings.ReplaceAll(text, keyword, fmt.Sprintf("[red]%s[#32CD32]", keyword))
-	}
+	setupColumns(table)
 
 	showBufferedLines := func(keyword string) {
-		clearTable()
+		clearTable(table)
 		row := table.GetRowCount()
 		if len(keyword) > 0 {
 			for _, line := range bufferedLines {
 				if strings.Contains(line.Text, keyword) {
 					highlightedText := highlightKeyword(line.Text, keyword)
-
-					table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
-						SetTextColor(tcell.ColorWhite).
-						SetAlign(tview.AlignLeft).
-						SetExpansion(1))
-
-					table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
-						SetTextColor(tcell.ColorLightGoldenrodYellow).
-						SetAlign(tview.AlignLeft).
-						SetExpansion(1))
-
-					table.SetCell(row, 2, tview.NewTableCell(highlightedText).
-						SetTextColor(tcell.ColorLimeGreen).
-						SetAlign(tview.AlignLeft).
-						SetExpansion(2))
+					renderRow(table, row, line, highlightedText)
 					row++
 				}
 			}
@@ -96,20 +88,7 @@ func appUI(tail Tail) {
 			// TODO: take the count when search used,
 			// 	consider tail.Lines b/c data will be appended to both ch and bufferedLines
 			for _, line := range bufferedLines {
-				table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
-					SetTextColor(tcell.ColorWhite).
-					SetAlign(tview.AlignLeft).
-					SetExpansion(1))
-
-				table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
-					SetTextColor(tcell.ColorLightGoldenrodYellow).
-					SetAlign(tview.AlignLeft).
-					SetExpansion(1))
-
-				table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
-					SetTextColor(tcell.ColorLimeGreen).
-					SetAlign(tview.AlignLeft).
-					SetExpansion(2))
+				renderRow(table, row, line, "")
 				row++
 			}
 			isSearchUsed = false
@@ -124,25 +103,17 @@ func appUI(tail Tail) {
 		for line := range tail.Lines {
 			bufferedLines = append(bufferedLines, line)
 
-			table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
-				SetTextColor(tcell.ColorWhite).
-				SetAlign(tview.AlignLeft).
-				SetExpansion(1))
-
-			table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
-				SetTextColor(tcell.ColorLightGoldenrodYellow).
-				SetAlign(tview.AlignLeft).
-				SetExpansion(1))
-
-			table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
-				SetTextColor(tcell.ColorLimeGreen).
-				SetAlign(tview.AlignLeft).
-				SetExpansion(2))
+			renderRow(table, row, line, "")
 			table.ScrollToEnd()
 			table.Select(row, 1)
 			row++
 		}
 	}()
+
+	header := tview.NewTextView().
+		SetText("btail 🐝").
+		SetTextAlign(tview.AlignCenter).
+		SetDynamicColors(true)
 
 	mainContent := tview.NewFlex().
 		AddItem(table, 0, 1, true)
