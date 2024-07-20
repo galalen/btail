@@ -104,9 +104,16 @@ func appUI(tail Tail) {
 			bufferedLines = append(bufferedLines, line)
 
 			renderRow(table, row, line, "")
-			table.ScrollToEnd()
-			table.Select(row, 1)
 			row++
+
+			app.QueueUpdateDraw(func() {
+				_, _, _, height := table.GetInnerRect()
+				lastVisibleRow := row - 1
+				if lastVisibleRow > height {
+					table.SetOffset(row, lastVisibleRow-height+1)
+				}
+				table.Select(lastVisibleRow, 1)
+			})
 		}
 	}()
 

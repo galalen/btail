@@ -25,11 +25,11 @@ func highlightPatterns(text string) string {
 	})
 
 	text = urlRegex.ReplaceAllStringFunc(text, func(url string) string {
-		return fmt.Sprintf("[green::u]%s[%s::-]", url, primaryColor)
+		return fmt.Sprintf("[%s::u]%s[%s::-]", primaryColor, url, primaryColor)
 	})
 
 	text = filePathRegex.ReplaceAllStringFunc(text, func(path string) string {
-		return fmt.Sprintf("[green::u]%s[%s::-]", path, primaryColor)
+		return fmt.Sprintf("[%s::u]%s[%s::-]", primaryColor, path, primaryColor)
 	})
 
 	return text

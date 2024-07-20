@@ -11,7 +11,7 @@ func runWithoutUI(tail Tail) {
 	rowCount := 1
 	for line := range tail.Lines {
 		timestamp := line.Time.Format(time.RFC3339)
-		fmt.Println(fmt.Sprintf("[%d] %s - %s", rowCount, timestamp, line.Text))
+		fmt.Printf("[%d] %s - %s", rowCount, timestamp, line.Text)
 
 		rowCount++
 	}
@@ -41,6 +41,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	//runWithoutUI(tail)
+	// runWithoutUI(tail)
 	appUI(tail)
 }
