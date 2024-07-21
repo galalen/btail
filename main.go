@@ -42,5 +42,5 @@ func main() {
 	}
 
 	// runWithoutUI(tail)
-	appUI(tail)
+	NewBtailApp(tail).Run()
 }

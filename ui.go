@@ -9,110 +9,120 @@ import (
 	"github.com/rivo/tview"
 )
 
-func setupColumns(table *tview.Table) {
-	table.SetCell(0, 0, tview.NewTableCell("No.").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetStyle(tcell.StyleDefault.Bold(true)).
-		SetExpansion(1))
-
-	table.SetCell(0, 1, tview.NewTableCell("Timestamp").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetStyle(tcell.StyleDefault.Bold(true)).
-		SetExpansion(1))
-
-	table.SetCell(0, 2, tview.NewTableCell("Message").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetStyle(tcell.StyleDefault.Bold(true)).
-		SetExpansion(9))
+type BtailApp struct {
+	app           *tview.Application
+	table         *tview.Table
+	searchInput   *tview.InputField
+	tail          Tail
+	bufferedLines []Line
+	isSearchUsed  bool
 }
 
-func clearTable(table *tview.Table) {
-	table.Clear()
-	setupColumns(table)
-}
-
-func renderRow(table *tview.Table, row int, line Line, newTextMsg string) {
-	table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(1))
-
-	table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(1))
-
-	if newTextMsg != "" {
-		table.SetCell(row, 2, tview.NewTableCell(newTextMsg).
-			SetTextColor(tcell.ColorLightGreen).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(2))
-	} else {
-		table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
-			SetTextColor(tcell.ColorLightGreen).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(2))
-	}
-}
-
-func appUI(tail Tail) {
-	app := tview.NewApplication()
-
-	var bufferedLines []Line
-	var isSearchUsed bool
-
+func NewBtailApp(tail Tail) *BtailApp {
 	table := tview.NewTable().
 		SetBorders(false).
 		SetFixed(1, 3).
 		SetSelectable(true, false).
 		ScrollToEnd()
 
-	setupColumns(table)
+	return &BtailApp{
+		app:         tview.NewApplication(),
+		table:       table,
+		searchInput: tview.NewInputField(),
+		tail:        tail,
+	}
+}
 
-	showBufferedLines := func(keyword string) {
-		clearTable(table)
-		row := table.GetRowCount()
-		if len(keyword) > 0 {
-			for _, line := range bufferedLines {
-				if strings.Contains(line.Text, keyword) {
-					highlightedText := highlightKeyword(line.Text, keyword)
-					renderRow(table, row, line, highlightedText)
-					row++
-				}
-			}
-			isSearchUsed = true
-		} else {
-			// TODO: take the count when search used,
-			// 	consider tail.Lines b/c data will be appended to both ch and bufferedLines
-			for _, line := range bufferedLines {
-				renderRow(table, row, line, "")
+func (b *BtailApp) setupColumns() {
+	b.table.SetCell(0, 0, tview.NewTableCell("No.").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetStyle(tcell.StyleDefault.Bold(true)).
+		SetExpansion(1))
+
+	b.table.SetCell(0, 1, tview.NewTableCell("Timestamp").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetStyle(tcell.StyleDefault.Bold(true)).
+		SetExpansion(1))
+
+	b.table.SetCell(0, 2, tview.NewTableCell("Message").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetStyle(tcell.StyleDefault.Bold(true)).
+		SetExpansion(9))
+}
+
+func (b *BtailApp) clearTable() {
+	b.table.Clear()
+	b.setupColumns()
+}
+
+func (b *BtailApp) renderRow(row int, line Line, newTextMsg string) {
+	b.table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(1))
+
+	b.table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignLeft).
+		SetExpansion(1))
+
+	if newTextMsg != "" {
+		b.table.SetCell(row, 2, tview.NewTableCell(newTextMsg).
+			SetTextColor(tcell.ColorLightGreen).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(2))
+	} else {
+		b.table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
+			SetTextColor(tcell.ColorLightGreen).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(2))
+	}
+}
+
+func (b *BtailApp) showBufferedLines(keyword string) {
+	b.clearTable()
+	row := b.table.GetRowCount()
+	if len(keyword) > 0 {
+		b.isSearchUsed = true
+
+		for _, line := range b.bufferedLines {
+			if strings.Contains(line.Text, keyword) {
+				highlightedText := highlightKeyword(line.Text, keyword)
+				b.renderRow(row, line, highlightedText)
 				row++
 			}
-			isSearchUsed = false
 		}
-		table.ScrollToEnd()
-		table.Select(row, 1)
+	} else {
+		b.isSearchUsed = false
+		for _, line := range b.bufferedLines {
+			b.renderRow(row, line, "")
+			row++
+		}
 	}
+	b.table.ScrollToEnd()
+}
+
+func (b *BtailApp) Run() {
+	b.setupColumns()
 
 	// main populate
 	go func() {
-		row := table.GetRowCount()
-		for line := range tail.Lines {
-			bufferedLines = append(bufferedLines, line)
+		row := b.table.GetRowCount()
+		for line := range b.tail.Lines {
+			b.bufferedLines = append(b.bufferedLines, line)
 
-			renderRow(table, row, line, "")
+			b.renderRow(row, line, "")
 			row++
 
-			app.QueueUpdateDraw(func() {
-				_, _, _, height := table.GetInnerRect()
+			b.app.QueueUpdateDraw(func() {
+				_, _, _, height := b.table.GetInnerRect()
 				lastVisibleRow := row - 1
 				if lastVisibleRow > height {
-					table.SetOffset(row, lastVisibleRow-height+1)
+					b.table.SetOffset(row, lastVisibleRow-height+1)
 				}
-				table.Select(lastVisibleRow, 1)
 			})
 		}
 	}()
@@ -123,33 +133,32 @@ func appUI(tail Tail) {
 		SetDynamicColors(true)
 
 	mainContent := tview.NewFlex().
-		AddItem(table, 0, 1, true)
+		AddItem(b.table, 0, 1, true)
 
 	// Footer TextView
 	footerInfo := tview.NewTextView()
-	footerInfo.SetText("\tSearch (Ctrl+F) | Quit (Ctrl+Q) | Exit (ESC) | UP (↑) | Down (↓)")
+	footerInfo.SetText("Quit (Ctrl+Q)")
 	footerInfo.SetTextAlign(tview.AlignCenter)
 	footerInfo.SetDynamicColors(true)
-	footerInfo.SetBackgroundColor(tcell.ColorRebeccaPurple)
+	footerInfo.SetBackgroundColor(tcell.ColorGray)
 
-	footerInput := tview.NewInputField()
-	footerInput.SetPlaceholder("(Ctrl+F) Search 🔍")
-	footerInput.SetFieldTextColor(tcell.ColorWhite)
-	footerInput.SetPlaceholderTextColor(tcell.ColorWhite)
-	footerInput.SetFieldTextColor(tcell.ColorWhite)
-	footerInput.SetBackgroundColor(tcell.ColorRebeccaPurple)
-	footerInput.SetDoneFunc(func(key tcell.Key) {
+	b.searchInput.SetPlaceholder("(Ctrl+F) Search 🔍")
+	b.searchInput.SetFieldTextColor(tcell.ColorWhite)
+	b.searchInput.SetPlaceholderTextColor(tcell.ColorWhite)
+	b.searchInput.SetFieldTextColor(tcell.ColorWhite)
+	b.searchInput.SetBackgroundColor(tcell.ColorDimGray)
+	b.searchInput.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
-			keyword := footerInput.GetText()
+			keyword := b.searchInput.GetText()
 			if len(keyword) > 0 {
-				showBufferedLines(keyword)
+				b.showBufferedLines(keyword)
 			}
 		}
 	})
 
 	footer := tview.NewFlex().
-		AddItem(footerInput, 0, 5, true).
-		AddItem(footerInfo, 0, 5, false)
+		AddItem(b.searchInput, 0, 8, true).
+		AddItem(footerInfo, 0, 2, false)
 
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -157,19 +166,21 @@ func appUI(tail Tail) {
 		AddItem(mainContent, 0, 10, true).
 		AddItem(footer, 1, 1, false)
 
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	b.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyCtrlF:
-			app.SetFocus(footerInput)
+			b.app.SetFocus(b.searchInput)
+			b.searchInput.SetPlaceholder("...")
 			return nil
 		case tcell.KeyCtrlQ:
-			app.Stop()
+			b.app.Stop()
 			return nil
 		case tcell.KeyEsc:
-			app.SetFocus(table)
-			footerInput.SetText("")
-			if isSearchUsed {
-				showBufferedLines("")
+			b.searchInput.SetPlaceholder("(Ctrl+F) Search 🔍")
+			b.app.SetFocus(b.table)
+			b.searchInput.SetText("")
+			if b.isSearchUsed {
+				b.showBufferedLines("")
 			}
 			return nil
 		default:
@@ -178,7 +189,7 @@ func appUI(tail Tail) {
 		return event
 	})
 
-	if err := app.SetRoot(flex, true).Run(); err != nil {
+	if err := b.app.SetRoot(flex, true).Run(); err != nil {
 		panic(err)
 	}
 }
