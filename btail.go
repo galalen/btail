@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 type Config struct {
@@ -18,6 +20,10 @@ type Config struct {
 type Tail struct {
 	Filename string
 	Lines    chan Line
+	Config   Config
+	file     *os.File
+	watcher  *fsnotify.Watcher
+	done     chan struct{}
 }
 
 type Line struct {
@@ -25,61 +31,86 @@ type Line struct {
 	Time time.Time
 }
 
-func TailFile(config Config) (Tail, error) {
-	tail := Tail{
+func TailFile(config Config) (*Tail, error) {
+	t := &Tail{
 		Filename: config.Filename,
 		Lines:    make(chan Line),
+		Config:   config,
+		done:     make(chan struct{}),
 	}
 
-	go func() {
-		defer close(tail.Lines)
+	var err error
+	t.file, err = os.Open(config.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %v", config.Filename, err)
+	}
 
-		file, err := os.Open(config.Filename)
+	if config.Follow {
+		t.watcher, err = fsnotify.NewWatcher()
 		if err != nil {
-			log.Fatalf("failed to open file: %v", err)
+			t.file.Close()
+			return nil, fmt.Errorf("failed to create watcher: %v", err)
 		}
-		defer file.Close()
-
-		fileInfo, err := file.Stat()
+		err = t.watcher.Add(config.Filename)
 		if err != nil {
-			log.Fatalf("failed to get file info: %v", err)
+			t.file.Close()
+			t.watcher.Close()
+			return nil, fmt.Errorf("failed to add file to watcher: %v", err)
 		}
-		fileSize := fileInfo.Size()
+	}
 
-		lines, offset, err := readLastNLines(file, fileSize, config.Lines)
-		if err != nil {
-			log.Fatalf("failed to read lines from file: %v", err)
-		}
+	go t.tail()
 
-		for _, line := range lines {
-			tail.Lines <- line
-		}
-
-		if config.Follow {
-			if err := followFile(file, offset, tail.Lines); err != nil {
-				log.Fatalf("failed to follow file: %v", err)
-			}
-		}
-	}()
-	return tail, nil
+	return t, nil
 }
 
-func readLastNLines(file *os.File, fileSize int64, lines int) ([]Line, int64, error) {
+func (t *Tail) tail() {
+	defer close(t.Lines)
+	defer t.file.Close()
+	if t.watcher != nil {
+		defer t.watcher.Close()
+	}
+
+	lines, offset, err := t.readLastNLines()
+	if err != nil {
+		log.Printf("failed to read lines from file: %v", err)
+		return
+	}
+
+	for _, line := range lines {
+		t.Lines <- line
+	}
+
+	if t.Config.Follow {
+		if err := t.followFile(offset); err != nil {
+			log.Printf("failed to follow file: %v", err)
+		}
+	}
+}
+
+func (t *Tail) readLastNLines() ([]Line, int64, error) {
+	fileInfo, err := t.file.Stat()
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get file info: %v", err)
+	}
+
+	fileSize := fileInfo.Size()
+
 	var lineCount int
 	var offset int64 = 0
 	chunkSize := int64(4096)
 	var result []Line
 	var lineBuffer []byte
 
-	for lineCount < lines && offset < fileSize {
+	for lineCount < t.Config.Lines && offset < fileSize {
 		if offset+chunkSize > fileSize {
 			chunkSize = fileSize - offset
 		}
 
 		offset += chunkSize
-		file.Seek(-offset, io.SeekEnd)
+		t.file.Seek(-offset, io.SeekEnd)
 		chunk := make([]byte, chunkSize)
-		_, err := file.Read(chunk)
+		_, err := t.file.Read(chunk)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to read file: %w", err)
 		}
@@ -91,7 +122,7 @@ func readLastNLines(file *os.File, fileSize int64, lines int) ([]Line, int64, er
 					result = append([]Line{{string(lineBuffer), time.Now()}}, result...)
 					lineBuffer = nil
 				}
-				if lineCount == lines {
+				if lineCount == t.Config.Lines {
 					break
 				}
 			} else {
@@ -100,29 +131,50 @@ func readLastNLines(file *os.File, fileSize int64, lines int) ([]Line, int64, er
 		}
 	}
 
-	if lineCount < lines && len(lineBuffer) > 0 {
+	if lineCount < t.Config.Lines && len(lineBuffer) > 0 {
 		result = append([]Line{{string(lineBuffer), time.Now()}}, result...)
 	}
 
 	return result, fileSize - offset, nil
 }
 
-func followFile(file *os.File, offset int64, lines chan<- Line) error {
-	for {
-		_, err := file.Seek(offset, 0)
-		if err != nil {
-			return fmt.Errorf("error seeking file: %w", err)
-		}
-
-		reader := bufio.NewReader(file)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				break
-			}
-			lines <- Line{line, time.Now()}
-			offset += int64(len(line))
-		}
-		time.Sleep(1 * time.Second)
+func (t *Tail) followFile(offset int64) error {
+	_, err := t.file.Seek(offset, io.SeekStart)
+	if err != nil {
+		return fmt.Errorf("error seeking file: %w", err)
 	}
+
+	reader := bufio.NewReader(t.file)
+
+	for {
+		select {
+		case event, ok := <-t.watcher.Events:
+			if !ok {
+				return nil
+			}
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				for {
+					line, err := reader.ReadString('\n')
+					if err != nil {
+						if err == io.EOF {
+							break
+						}
+						return fmt.Errorf("error reading file: %w", err)
+					}
+					t.Lines <- Line{line, time.Now()}
+				}
+			}
+		case err, ok := <-t.watcher.Errors:
+			if !ok {
+				return nil
+			}
+			log.Printf("error from watcher: %v", err)
+		case <-t.done:
+			return nil
+		}
+	}
+}
+
+func (t *Tail) Stop() {
+	close(t.done)
 }

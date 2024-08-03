@@ -13,12 +13,12 @@ type BtailApp struct {
 	app           *tview.Application
 	table         *tview.Table
 	searchInput   *tview.InputField
-	tail          Tail
+	tail          *Tail
 	bufferedLines []Line
 	isSearchUsed  bool
 }
 
-func NewBtailApp(tail Tail) *BtailApp {
+func NewBtailApp(tail *Tail) *BtailApp {
 	table := tview.NewTable().
 		SetBorders(false).
 		SetFixed(1, 3).
