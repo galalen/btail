@@ -30,12 +30,11 @@ func main() {
 	}
 
 	config := Config{
-		Filename: *filename,
-		Lines:    *lines,
-		Follow:   *follow,
+		Lines:  *lines,
+		Follow: *follow,
 	}
 
-	tail, err := TailFile(config)
+	tail, err := TailFile(*filename, config)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
