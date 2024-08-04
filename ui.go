@@ -11,7 +11,7 @@ import (
 
 type BtailApp struct {
 	tail          *Tail
-	bufferedLines []Line
+	bufferedLines *LogBufferQueue
 	app           *tview.Application
 	table         *tview.Table
 	searchInput   *tview.InputField
@@ -26,10 +26,11 @@ func NewBtailApp(tail *Tail) *BtailApp {
 		ScrollToEnd()
 
 	return &BtailApp{
-		app:         tview.NewApplication(),
-		table:       table,
-		searchInput: tview.NewInputField(),
-		tail:        tail,
+		app:           tview.NewApplication(),
+		table:         table,
+		searchInput:   tview.NewInputField(),
+		tail:          tail,
+		bufferedLines: NewLogBufferQueue(tail.Config.Lines),
 	}
 }
 
@@ -86,7 +87,7 @@ func (b *BtailApp) showBufferedLines() {
 	b.clearTable()
 	row := b.table.GetRowCount()
 	if len(b.searchKeyword) > 0 {
-		for _, line := range b.bufferedLines {
+		for _, line := range b.bufferedLines.GetAll() {
 			if strings.Contains(line.Text, b.searchKeyword) {
 				highlightedText := highlightKeyword(line.Text, b.searchKeyword)
 				b.renderRow(row, line, highlightedText)
@@ -94,7 +95,7 @@ func (b *BtailApp) showBufferedLines() {
 			}
 		}
 	} else {
-		for _, line := range b.bufferedLines {
+		for _, line := range b.bufferedLines.GetAll() {
 			b.renderRow(row, line, "")
 			row++
 		}
@@ -105,14 +106,16 @@ func (b *BtailApp) showBufferedLines() {
 func (b *BtailApp) tailFile() {
 	highlightedText := ""
 	row := b.table.GetRowCount()
+
 	for line := range b.tail.Lines {
-		b.bufferedLines = append(b.bufferedLines, line)
+		b.bufferedLines.Push(line)
+
 		if b.searchKeyword != "" {
 			if strings.Contains(line.Text, b.searchKeyword) {
 				highlightedText = highlightKeyword(line.Text, b.searchKeyword)
 
-				b.renderRow(row, line, highlightedText)
-				row++
+				b.renderRow(b.table.GetRowCount(), line, highlightedText)
+				row = b.table.GetRowCount() + 1
 				highlightedText = ""
 				b.app.QueueUpdateDraw(func() {
 					_, _, _, height := b.table.GetInnerRect()
@@ -123,8 +126,8 @@ func (b *BtailApp) tailFile() {
 				})
 			}
 		} else {
-			b.renderRow(row, line, "")
-			row++
+			b.renderRow(b.table.GetRowCount(), line, "")
+			row = b.table.GetRowCount() + 1
 			b.app.QueueUpdateDraw(func() {
 				_, _, _, height := b.table.GetInnerRect()
 				lastVisibleRow := row - 1
