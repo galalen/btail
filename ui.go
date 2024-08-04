@@ -10,12 +10,12 @@ import (
 )
 
 type BtailApp struct {
+	tail          *Tail
+	bufferedLines []Line
 	app           *tview.Application
 	table         *tview.Table
 	searchInput   *tview.InputField
-	tail          *Tail
-	bufferedLines []Line
-	isSearchUsed  bool
+	searchKeyword string
 }
 
 func NewBtailApp(tail *Tail) *BtailApp {
@@ -82,21 +82,18 @@ func (b *BtailApp) renderRow(row int, line Line, newTextMsg string) {
 	}
 }
 
-func (b *BtailApp) showBufferedLines(keyword string) {
+func (b *BtailApp) showBufferedLines() {
 	b.clearTable()
 	row := b.table.GetRowCount()
-	if len(keyword) > 0 {
-		b.isSearchUsed = true
-
+	if len(b.searchKeyword) > 0 {
 		for _, line := range b.bufferedLines {
-			if strings.Contains(line.Text, keyword) {
-				highlightedText := highlightKeyword(line.Text, keyword)
+			if strings.Contains(line.Text, b.searchKeyword) {
+				highlightedText := highlightKeyword(line.Text, b.searchKeyword)
 				b.renderRow(row, line, highlightedText)
 				row++
 			}
 		}
 	} else {
-		b.isSearchUsed = false
 		for _, line := range b.bufferedLines {
 			b.renderRow(row, line, "")
 			row++
@@ -105,18 +102,29 @@ func (b *BtailApp) showBufferedLines(keyword string) {
 	b.table.ScrollToEnd()
 }
 
-func (b *BtailApp) Run() {
-	b.setupColumns()
+func (b *BtailApp) tailFile() {
+	highlightedText := ""
+	row := b.table.GetRowCount()
+	for line := range b.tail.Lines {
+		b.bufferedLines = append(b.bufferedLines, line)
+		if b.searchKeyword != "" {
+			if strings.Contains(line.Text, b.searchKeyword) {
+				highlightedText = highlightKeyword(line.Text, b.searchKeyword)
 
-	// main populate
-	go func() {
-		row := b.table.GetRowCount()
-		for line := range b.tail.Lines {
-			b.bufferedLines = append(b.bufferedLines, line)
-
+				b.renderRow(row, line, highlightedText)
+				row++
+				highlightedText = ""
+				b.app.QueueUpdateDraw(func() {
+					_, _, _, height := b.table.GetInnerRect()
+					lastVisibleRow := row - 1
+					if lastVisibleRow > height {
+						b.table.SetOffset(row, lastVisibleRow-height+1)
+					}
+				})
+			}
+		} else {
 			b.renderRow(row, line, "")
 			row++
-
 			b.app.QueueUpdateDraw(func() {
 				_, _, _, height := b.table.GetInnerRect()
 				lastVisibleRow := row - 1
@@ -125,7 +133,12 @@ func (b *BtailApp) Run() {
 				}
 			})
 		}
-	}()
+
+	}
+}
+
+func (b *BtailApp) Run() {
+	b.setupColumns()
 
 	header := tview.NewTextView().
 		SetText("btail 🐝").
@@ -135,7 +148,6 @@ func (b *BtailApp) Run() {
 	mainContent := tview.NewFlex().
 		AddItem(b.table, 0, 1, true)
 
-	// Footer TextView
 	footerInfo := tview.NewTextView()
 	footerInfo.SetText("Quit (Ctrl+Q)")
 	footerInfo.SetTextAlign(tview.AlignCenter)
@@ -149,9 +161,9 @@ func (b *BtailApp) Run() {
 	b.searchInput.SetBackgroundColor(tcell.ColorDimGray)
 	b.searchInput.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
-			keyword := b.searchInput.GetText()
-			if len(keyword) > 0 {
-				b.showBufferedLines(keyword)
+			b.searchKeyword = b.searchInput.GetText()
+			if len(b.searchKeyword) > 0 {
+				b.showBufferedLines()
 			}
 		}
 	})
@@ -179,15 +191,16 @@ func (b *BtailApp) Run() {
 			b.searchInput.SetPlaceholder("(Ctrl+F) Search 🔍")
 			b.app.SetFocus(b.table)
 			b.searchInput.SetText("")
-			if b.isSearchUsed {
-				b.showBufferedLines("")
-			}
+			b.searchKeyword = ""
+			b.showBufferedLines()
 			return nil
 		default:
 			// ignored
 		}
 		return event
 	})
+
+	go b.tailFile()
 
 	if err := b.app.SetRoot(flex, true).Run(); err != nil {
 		panic(err)
