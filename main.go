@@ -18,23 +18,22 @@ func runWithoutUI(tail *Tail) {
 }
 
 func main() {
-	filename := flag.String("file", "", "File to tail")
-	lines := flag.Int("lines", 10, "Number of lines to display")
-	follow := flag.Bool("follow", false, "Follow the file for new lines (similar to tail -f)")
-
+	lines := flag.Int("n", 10, "number of lines to display")
+	follow := flag.Bool("f", false, "follow the file for new lines")
 	flag.Parse()
 
-	if *filename == "" {
-		fmt.Println("Usage: go run main.go --file <filename> [--lines <number_of_lines>] [--follow]")
+	if len(flag.Args()) < 1 {
+		fmt.Println("Error: Please provide a filename")
 		os.Exit(1)
 	}
+	filename := flag.Args()[0]
 
 	config := Config{
 		Lines:  *lines,
 		Follow: *follow,
 	}
 
-	tail, err := TailFile(*filename, config)
+	tail, err := TailFile(filename, config)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
