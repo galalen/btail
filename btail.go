@@ -71,7 +71,7 @@ func (t *Tail) tail() {
 		defer t.watcher.Close()
 	}
 
-	lines, offset, err := t.readLastNLines()
+	lines, err := t.readLastNLines()
 	if err != nil {
 		log.Printf("failed to read lines from file: %v", err)
 		return
@@ -82,64 +82,71 @@ func (t *Tail) tail() {
 	}
 
 	if t.Config.Follow {
-		if err := t.followFile(offset); err != nil {
+		if err := t.followFile(); err != nil {
 			log.Printf("failed to follow file: %v", err)
 		}
 	}
 }
 
-func (t *Tail) readLastNLines() ([]Line, int64, error) {
-	fileInfo, err := t.file.Stat()
+func (t *Tail) readLastNLines() ([]Line, error) {
+	stat, err := t.file.Stat()
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get file info: %v", err)
+		return nil, err
 	}
 
-	fileSize := fileInfo.Size()
+	fileSize := stat.Size()
+	buffer := make([]byte, 1024*1024) // 1MB buffer
+	offset := fileSize
+	lineCount := 0
+	lines := make([]Line, 0, t.Config.Lines)
 
-	var lineCount int
-	var offset int64 = 0
-	chunkSize := int64(4096)
-	var result []Line
-	var lineBuffer []byte
-
-	for lineCount < t.Config.Lines && offset < fileSize {
-		if offset+chunkSize > fileSize {
-			chunkSize = fileSize - offset
+	for lineCount < t.Config.Lines && offset > 0 {
+		readSize := int64(len(buffer))
+		if offset < readSize {
+			readSize = offset
 		}
+		offset -= readSize
 
-		offset += chunkSize
-		t.file.Seek(-offset, io.SeekEnd)
-		chunk := make([]byte, chunkSize)
-		_, err := t.file.Read(chunk)
+		_, err := t.file.Seek(offset, io.SeekStart)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to read file: %w", err)
+			return nil, err
 		}
 
-		for i := len(chunk) - 1; i >= 0; i-- {
-			if chunk[i] == '\n' {
-				if len(lineBuffer) > 0 {
-					lineCount++
-					result = append([]Line{{string(lineBuffer), time.Now()}}, result...)
-					lineBuffer = nil
-				}
-				if lineCount == t.Config.Lines {
+		bytesRead, err := t.file.Read(buffer[:readSize])
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		for i := bytesRead - 1; i >= 0; i-- {
+			if buffer[i] == '\n' {
+				lineCount++
+				if lineCount > t.Config.Lines {
+					offset += int64(i) + 1
 					break
 				}
-			} else {
-				lineBuffer = append([]byte{chunk[i]}, lineBuffer...)
 			}
 		}
 	}
 
-	if lineCount < t.Config.Lines && len(lineBuffer) > 0 {
-		result = append([]Line{{string(lineBuffer), time.Now()}}, result...)
+	_, err = t.file.Seek(offset, io.SeekStart)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, fileSize - offset, nil
+	scanner := bufio.NewScanner(t.file)
+	for scanner.Scan() && len(lines) < t.Config.Lines {
+		lines = append(lines, Line{Text: scanner.Text(), Time: time.Now()})
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return lines, nil
 }
 
-func (t *Tail) followFile(offset int64) error {
-	_, err := t.file.Seek(offset, io.SeekStart)
+func (t *Tail) followFile() error {
+	_, err := t.file.Seek(0, io.SeekEnd)
 	if err != nil {
 		return fmt.Errorf("error seeking file: %w", err)
 	}
