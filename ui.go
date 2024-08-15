@@ -1,211 +1,185 @@
 package main
 
 import (
-	"strconv"
+	"fmt"
+	"log"
 	"strings"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-type BtailApp struct {
+type model struct {
 	tail          *Tail
-	bufferedLines *LogBufferQueue
-	app           *tview.Application
-	table         *tview.Table
-	searchInput   *tview.InputField
-	searchKeyword string
+	logsView      viewport.Model
+	bufferedLines []Line
+	width         int
+	height        int
+	searchInput   textinput.Model
+	searching     bool
+	searchTerm    string
+	matchCount    int
 }
 
-func NewBtailApp(tail *Tail) *BtailApp {
-	table := tview.NewTable().
-		SetBorders(false).
-		SetFixed(1, 3).
-		SetSelectable(true, false).
-		ScrollToEnd()
+const bufferedLinesCount = 500
 
-	return &BtailApp{
-		app:           tview.NewApplication(),
-		table:         table,
-		searchInput:   tview.NewInputField(),
-		tail:          tail,
-		bufferedLines: NewLogBufferQueue(tail.Config.Lines),
+func initialModel(tail *Tail) model {
+	lv := viewport.New(80, 20)
+	lv.Style = baseStyle
+
+	ti := textinput.New()
+	ti.Placeholder = "Search..."
+
+	return model{
+		tail:        tail,
+		logsView:    lv,
+		searchInput: ti,
 	}
 }
 
-func (b *BtailApp) setupColumns() {
-	b.table.SetCell(0, 0, tview.NewTableCell("No.").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetStyle(tcell.StyleDefault.Bold(true)).
-		SetExpansion(1))
-
-	b.table.SetCell(0, 1, tview.NewTableCell("Timestamp").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetStyle(tcell.StyleDefault.Bold(true)).
-		SetExpansion(1))
-
-	b.table.SetCell(0, 2, tview.NewTableCell("Message").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetStyle(tcell.StyleDefault.Bold(true)).
-		SetExpansion(9))
+func (m model) Init() tea.Cmd {
+	return m.tailFile()
 }
 
-func (b *BtailApp) clearTable() {
-	b.table.Clear()
-	b.setupColumns()
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q":
+			if !m.searching {
+				return m, tea.Quit
+			}
+		case "ctrl+c":
+			return m, tea.Quit
+		case "ctrl+f":
+			m.searching = !m.searching
+			if m.searching {
+				m.searchInput.Focus()
+			} else {
+				m.searchInput.Blur()
+			}
+			m.searchTerm = ""
+			m.matchCount = 0
+			m.updateLogsView()
+		case "esc":
+			if m.searching {
+				m.searching = false
+				m.searchInput.SetValue("")
+				m.searchInput.Blur()
+				m.searchTerm = ""
+				m.matchCount = 0
+				m.updateLogsView()
+			}
+		case "up":
+			m.logsView.LineUp(1)
+		case "down":
+			m.logsView.LineDown(1)
+		case "home":
+			m.logsView.GotoTop()
+		case "end":
+			m.logsView.GotoBottom()
+		}
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.logsView.Width = m.width - 4
+		m.logsView.Height = m.height - 6
+		m.searchInput.Width = m.width / 3
+		return m, nil
+	case Line:
+		m.bufferedLines = append(m.bufferedLines, msg)
+		if len(m.bufferedLines) > bufferedLinesCount {
+			m.bufferedLines = m.bufferedLines[1:]
+		}
+
+		m.updateLogsView()
+		return m, m.tailFile()
+	case nil:
+		if m.tail.Config.Follow {
+			return m, m.tailFile()
+		}
+		return m, nil
+	}
+
+	if m.searching {
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		m.searchTerm = m.searchInput.Value()
+		m.updateLogsView()
+		return m, cmd
+	}
+
+	m.logsView, cmd = m.logsView.Update(msg)
+	return m, cmd
 }
 
-func (b *BtailApp) renderRow(row int, line Line, newTextMsg string) {
-	b.table.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(row)).
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(1))
+func (m *model) updateLogsView() {
+	var content strings.Builder
+	m.matchCount = 0
 
-	b.table.SetCell(row, 1, tview.NewTableCell(line.Time.Format(time.RFC3339)).
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(1))
+	for _, msg := range m.bufferedLines {
+		highlightedContent := highlightPatterns(msg.Text)
 
-	if newTextMsg != "" {
-		b.table.SetCell(row, 2, tview.NewTableCell(newTextMsg).
-			SetTextColor(tcell.ColorLightGreen).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(2))
+		if m.searchTerm != "" {
+			count := strings.Count(strings.ToLower(msg.Text), strings.ToLower(m.searchTerm))
+			m.matchCount += count
+			if count > 0 {
+				highlightedContent = highlightSearch(highlightedContent, m.searchTerm)
+			}
+		}
+
+		content.WriteString(fmt.Sprintf("[%s]\n%s\n\n", msg.Time.Format(time.Kitchen), highlightedContent))
+	}
+
+	m.logsView.SetContent(content.String())
+	m.logsView.GotoBottom()
+}
+
+func (m model) View() string {
+	title := titleStyle.Render("btail 🐝")
+
+	var statusBar string
+	if m.searching {
+		searchInput := searchInputStyle.Render(m.searchInput.View())
+		statusMessage := statusMessageStyle.Render(fmt.Sprintf("Matches: %d | Esc: cancel", m.matchCount))
+		statusBar = lipgloss.JoinHorizontal(lipgloss.Left, searchInput, statusMessage)
 	} else {
-		b.table.SetCell(row, 2, tview.NewTableCell(highlightPatterns(line.Text)).
-			SetTextColor(tcell.ColorLightGreen).
-			SetAlign(tview.AlignLeft).
-			SetExpansion(2))
+		statusBar = statusBarStyle.Render("\tq: quit | ctrl+f: search\t")
+	}
+
+	statusBar = lipgloss.NewStyle().Render(statusBar)
+
+	return lipgloss.JoinVertical(
+		lipgloss.Center,
+		title,
+		m.logsView.View(),
+		statusBar,
+	)
+}
+
+func (m model) tailFile() tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case line, ok := <-m.tail.Lines:
+			if !ok {
+				return nil
+			}
+			return line
+		case <-time.After(100 * time.Millisecond):
+			if m.tail.Config.Follow {
+				return m.tailFile()()
+			}
+			return nil
+		}
 	}
 }
 
-func (b *BtailApp) showBufferedLines() {
-	b.clearTable()
-	row := b.table.GetRowCount()
-	if len(b.searchKeyword) > 0 {
-		for _, line := range b.bufferedLines.GetAll() {
-			if strings.Contains(line.Text, b.searchKeyword) {
-				highlightedText := highlightKeyword(line.Text, b.searchKeyword)
-				b.renderRow(row, line, highlightedText)
-				row++
-			}
-		}
-	} else {
-		for _, line := range b.bufferedLines.GetAll() {
-			b.renderRow(row, line, "")
-			row++
-		}
-	}
-	b.table.ScrollToEnd()
-}
-
-func (b *BtailApp) tailFile() {
-	highlightedText := ""
-	row := b.table.GetRowCount()
-
-	for line := range b.tail.Lines {
-		b.bufferedLines.Push(line)
-
-		if b.searchKeyword != "" {
-			if strings.Contains(line.Text, b.searchKeyword) {
-				highlightedText = highlightKeyword(line.Text, b.searchKeyword)
-
-				b.renderRow(b.table.GetRowCount(), line, highlightedText)
-				row = b.table.GetRowCount() + 1
-				highlightedText = ""
-				b.app.QueueUpdateDraw(func() {
-					_, _, _, height := b.table.GetInnerRect()
-					lastVisibleRow := row - 1
-					if lastVisibleRow > height {
-						b.table.SetOffset(row, lastVisibleRow-height+1)
-					}
-				})
-			}
-		} else {
-			b.renderRow(b.table.GetRowCount(), line, "")
-			row = b.table.GetRowCount() + 1
-			b.app.QueueUpdateDraw(func() {
-				_, _, _, height := b.table.GetInnerRect()
-				lastVisibleRow := row - 1
-				if lastVisibleRow > height {
-					b.table.SetOffset(row, lastVisibleRow-height+1)
-				}
-			})
-		}
-
-	}
-}
-
-func (b *BtailApp) Run() {
-	b.setupColumns()
-
-	header := tview.NewTextView().
-		SetText("btail 🐝").
-		SetTextAlign(tview.AlignCenter).
-		SetDynamicColors(true)
-
-	mainContent := tview.NewFlex().
-		AddItem(b.table, 0, 1, true)
-
-	footerInfo := tview.NewTextView()
-	footerInfo.SetText("Quit (Ctrl+Q)")
-	footerInfo.SetTextAlign(tview.AlignCenter)
-	footerInfo.SetDynamicColors(true)
-	footerInfo.SetBackgroundColor(tcell.ColorGray)
-
-	b.searchInput.SetPlaceholder("(Ctrl+F) Search 🔍")
-	b.searchInput.SetFieldTextColor(tcell.ColorWhite)
-	b.searchInput.SetPlaceholderTextColor(tcell.ColorWhite)
-	b.searchInput.SetFieldTextColor(tcell.ColorWhite)
-	b.searchInput.SetBackgroundColor(tcell.ColorDimGray)
-	b.searchInput.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			b.searchKeyword = b.searchInput.GetText()
-			if len(b.searchKeyword) > 0 {
-				b.showBufferedLines()
-			}
-		}
-	})
-
-	footer := tview.NewFlex().
-		AddItem(b.searchInput, 0, 8, true).
-		AddItem(footerInfo, 0, 2, false)
-
-	flex := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(header, 1, 1, false).
-		AddItem(mainContent, 0, 10, true).
-		AddItem(footer, 1, 1, false)
-
-	b.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyCtrlF:
-			b.app.SetFocus(b.searchInput)
-			b.searchInput.SetPlaceholder("...")
-			return nil
-		case tcell.KeyCtrlQ:
-			b.app.Stop()
-			return nil
-		case tcell.KeyEsc:
-			b.searchInput.SetPlaceholder("(Ctrl+F) Search 🔍")
-			b.app.SetFocus(b.table)
-			b.searchInput.SetText("")
-			b.searchKeyword = ""
-			b.showBufferedLines()
-			return nil
-		default:
-			// ignored
-		}
-		return event
-	})
-
-	go b.tailFile()
-
-	if err := b.app.SetRoot(flex, true).Run(); err != nil {
-		panic(err)
+func runBtailApp(tail *Tail) {
+	p := tea.NewProgram(initialModel(tail), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
 	}
 }

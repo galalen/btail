@@ -10,8 +10,8 @@ import (
 func runWithoutUI(tail *Tail) {
 	rowCount := 1
 	for line := range tail.Lines {
-		timestamp := line.Time.Format(time.RFC3339)
-		fmt.Printf("[%d] %s - %s", rowCount, timestamp, line.Text)
+		timestamp := line.Time.Format(time.Kitchen)
+		fmt.Printf("[%d] [%s] - %s\n", rowCount, timestamp, line.Text)
 
 		rowCount++
 	}
@@ -40,5 +40,5 @@ func main() {
 	}
 
 	// runWithoutUI(tail)
-	NewBtailApp(tail).Run()
+	runBtailApp(tail)
 }
