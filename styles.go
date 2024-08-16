@@ -34,6 +34,9 @@ var (
 				Background(lipgloss.Color("237")).
 				Padding(0, 1)
 
+	timeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
 	ipStyle = lipgloss.NewStyle().
 		Background(lipgloss.Color("25")).
 		Foreground(lipgloss.Color("231"))

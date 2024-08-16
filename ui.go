@@ -131,7 +131,8 @@ func (m *model) updateLogsView() {
 			}
 		}
 
-		content.WriteString(fmt.Sprintf("[%s]\n%s\n\n", msg.Time.Format(time.Kitchen), highlightedContent))
+		t := timeStyle.Render(msg.Time.Format("03:04:05 PM"))
+		content.WriteString(fmt.Sprintf("[%s]\n%s\n\n", t, highlightedContent))
 	}
 
 	m.logsView.SetContent(content.String())
