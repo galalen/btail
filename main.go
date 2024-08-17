@@ -4,21 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 )
 
-func runWithoutUI(tail *Tail) {
-	rowCount := 1
-	for line := range tail.Lines {
-		timestamp := line.Time.Format(time.Kitchen)
-		fmt.Printf("[%d] [%s] - %s\n", rowCount, timestamp, line.Text)
-
-		rowCount++
-	}
-}
-
 func main() {
-	lines := flag.Int("n", 10, "number of lines to display")
+	lines := flag.Int("n", 5, "number of lines to display")
 	follow := flag.Bool("f", false, "follow the file for new lines")
 	flag.Parse()
 
@@ -39,6 +28,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	// runWithoutUI(tail)
 	runBtailApp(tail)
 }
