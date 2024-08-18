@@ -1,6 +1,8 @@
 # btail 🐝 (beautiful) - Interactive File Tail Viewer
 
-btail is a command-line utility for viewing the tail of files with an interactive terminal user interface. It allows you to monitor log files in real-time with features like live updates, search functionality, and easy navigation.
+btail is a command-line utility for viewing the tail of files with an interactive terminal user interface. It allows you to monitor log files in real-time with features like live updates, search functionality, syntax highlighting, and easy navigation.
+
+<img src="./assets/demo.gif" width="600" alt="btail in action" style="width: 100%;">
 
 ## Installation
 Make sure you have [go](https://go.dev/) installed on your system
