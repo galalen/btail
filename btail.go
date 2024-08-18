@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -116,7 +117,7 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 	lineCount := 0
 	lines := make([]Line, 0, t.Config.Lines)
 
-	for lineCount < t.Config.Lines && offset > 0 {
+	for lineCount < t.Config.Lines*2 && offset > 0 {
 		readSize := int64(len(buffer))
 		if offset < readSize {
 			readSize = offset
@@ -136,7 +137,7 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 		for i := bytesRead - 1; i >= 0; i-- {
 			if buffer[i] == '\n' {
 				lineCount++
-				if lineCount > t.Config.Lines {
+				if lineCount > t.Config.Lines*2 {
 					offset += int64(i) + 1
 					break
 				}
@@ -151,7 +152,10 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 
 	scanner := bufio.NewScanner(t.file)
 	for scanner.Scan() && len(lines) < t.Config.Lines {
-		lines = append(lines, Line{Text: scanner.Text(), Time: time.Now()})
+		trimmedText := strings.TrimSpace(scanner.Text())
+		if trimmedText != "" {
+			lines = append(lines, Line{Text: trimmedText, Time: time.Now()})
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
