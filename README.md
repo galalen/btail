@@ -4,6 +4,9 @@ btail is a command-line utility for viewing the tail of files with an interactiv
 
 <img src="./assets/demo.gif" width="600" alt="btail in action" style="width: 100%;">
 
+## Binary Files
+Download binary files from [releases](https://github.com/galalen/btail/releases)
+
 ## Installation
 Make sure you have [go](https://go.dev/) installed on your system
 ```bash 
@@ -24,7 +27,7 @@ btail -n 10 -f path/to/file.log
 ## Special Thanks
 
 - [nxadm/tail](https://github.com/nxadm/tail) and [grafana/tail](https://github.com/grafana/tail): For inspiring the core file tailing functionality.
-- [bubbletea](https://github.com/charmbracelet/bubbletea): For powering our interactive terminal user interface.
+- [bubbletea](https://github.com/charmbracelet/bubbletea): For powering the interactive terminal UI.
 
 ## Contributing
 
