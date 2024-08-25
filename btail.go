@@ -209,7 +209,7 @@ func (t *Tail) followFile() error {
 				t.readNewLines(reader)
 			}
 
-			if event.Op&fsnotify.Remove == fsnotify.Remove {
+			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
 				// TODO: handle this probably (show in status bar)
 				_ = t.watcher.Remove(t.Filename)
 				t.reopen()
