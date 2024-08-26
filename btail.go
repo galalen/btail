@@ -86,6 +86,22 @@ func (t *Tail) openFile() error {
 	return nil
 }
 
+func (t *Tail) reopen() {
+	var err error
+	for {
+		t.file, err = os.Open(t.Filename)
+		if err != nil {
+			if os.IsNotExist(err) {
+				time.Sleep(time.Second)
+			}
+		} else {
+			break
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
 func (t *Tail) tail() {
 	defer close(t.Lines)
 	defer t.file.Close()
@@ -191,6 +207,15 @@ func (t *Tail) followFile() error {
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				t.readNewLines(reader)
+			}
+
+			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+				// TODO: handle this probably (show in status bar)
+				_ = t.watcher.Remove(t.Filename)
+				t.reopen()
+				_ = t.watcher.Add(t.Filename)
+
+				reader = bufio.NewReader(t.file)
 			}
 		case _, ok := <-t.watcher.Errors:
 			if !ok {
