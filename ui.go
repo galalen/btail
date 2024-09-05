@@ -75,8 +75,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateLogsView()
 			}
 		case "up":
+			// TODO: handle follow mode, stop go-to-bottom while navigating
+			if m.searching && m.searchInput.Focused() {
+				m.searchInput.Blur()
+			}
 			m.logsView.LineUp(1)
 		case "down":
+			if m.searching && m.searchInput.Focused() {
+				m.searchInput.Blur()
+			}
 			m.logsView.LineDown(1)
 		case "home":
 			m.logsView.GotoTop()
@@ -105,7 +112,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.searching {
+	if m.searching && m.searchInput.Focused() {
 		m.searchInput, cmd = m.searchInput.Update(msg)
 		m.searchTerm = m.searchInput.Value()
 		m.updateLogsView()
