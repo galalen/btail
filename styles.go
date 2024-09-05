@@ -46,8 +46,7 @@ var (
 			Foreground(lipgloss.Color("231"))
 
 	filePathStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("231")).
-			Underline(true)
+			Foreground(lipgloss.Color("231"))
 
 	ipRegex       = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(:\d{1,5})?\b`)
 	urlRegex      = regexp.MustCompile(`\b(?:https?|ftp|rtmp|smtp)://\S+`)
