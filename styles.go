@@ -13,7 +13,7 @@ var (
 
 	titleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("228")).
-			Background(lipgloss.Color("63")).
+			Background(lipgloss.Color("237")).
 			Padding(0, 1)
 
 	statusBarStyle = lipgloss.NewStyle().
