@@ -26,25 +26,25 @@ type model struct {
 
 const bufferedLinesCount = 500
 
-func initialModel(tail *Tail) model {
+func initialModel(tail *Tail) *model {
 	lv := viewport.New(80, 20)
 	lv.Style = baseStyle
 
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
 
-	return model{
+	return &model{
 		tail:        tail,
 		logsView:    lv,
 		searchInput: ti,
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	return m.tailFile()
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -139,7 +139,7 @@ func (m *model) updateLogsView() {
 	m.logsView.GotoBottom()
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	title := titleStyle.Render("btail 🐝")
 
 	var statusBar string
@@ -161,7 +161,7 @@ func (m model) View() string {
 	)
 }
 
-func (m model) tailFile() tea.Cmd {
+func (m *model) tailFile() tea.Cmd {
 	return func() tea.Msg {
 		select {
 		case line, ok := <-m.tail.Lines:
