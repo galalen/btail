@@ -22,6 +22,8 @@ type model struct {
 	searching     bool
 	searchTerm    string
 	matchCount    int
+	autoScroll    bool
+	lastScrollPos int
 }
 
 const bufferedLinesCount = 500
@@ -37,6 +39,7 @@ func initialModel(tail *Tail) *model {
 		tail:        tail,
 		logsView:    lv,
 		searchInput: ti,
+		autoScroll:  true,
 	}
 }
 
@@ -75,12 +78,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateLogsView()
 			}
 		case "up":
+			m.autoScroll = false
 			m.logsView.LineUp(1)
 		case "down":
 			m.logsView.LineDown(1)
+			if m.logsView.AtBottom() {
+				m.autoScroll = true
+			}
 		case "home":
+			m.autoScroll = false
 			m.logsView.GotoTop()
 		case "end":
+			m.autoScroll = true
 			m.logsView.GotoBottom()
 		}
 	case tea.WindowSizeMsg:
@@ -112,6 +121,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// Check if the viewport has been scrolled
+	if m.logsView.YOffset != m.lastScrollPos {
+		if m.logsView.AtBottom() {
+			m.autoScroll = true
+		} else {
+			m.autoScroll = false
+		}
+		m.lastScrollPos = m.logsView.YOffset
+	}
+
 	m.logsView, cmd = m.logsView.Update(msg)
 	return m, cmd
 }
@@ -136,7 +155,9 @@ func (m *model) updateLogsView() {
 	}
 
 	m.logsView.SetContent(content.String())
-	m.logsView.GotoBottom()
+	if m.autoScroll {
+		m.logsView.GotoBottom()
+	}
 }
 
 func (m *model) View() string {
