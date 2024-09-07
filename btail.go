@@ -34,7 +34,7 @@ type Line struct {
 
 func TailFile(Filename string, config Config) (*Tail, error) {
 	if config.Lines <= 0 {
-		config.Lines = 5
+		config.Lines = 10
 	}
 
 	t := &Tail{

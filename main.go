@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	lines := flag.Int("n", 5, "number of lines to display")
+	lines := flag.Int("n", 10, "number of lines to display")
 	follow := flag.Bool("f", false, "follow the file for new lines")
 	flag.Parse()
 
