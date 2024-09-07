@@ -166,7 +166,8 @@ func (m *model) View() string {
 	var statusBar string
 	if m.searching {
 		searchInput := searchInputStyle.Render(m.searchInput.View())
-		statusMessage := statusMessageStyle.Render(fmt.Sprintf("Matches: %d | Esc: cancel", m.matchCount))
+		bufferInfo := fmt.Sprintf("buffer: %d/%d", len(m.bufferedLines), bufferedLinesCount)
+		statusMessage := statusMessageStyle.Render(fmt.Sprintf("matches: %d | %s | esc: cancel", m.matchCount, bufferInfo))
 		statusBar = lipgloss.JoinHorizontal(lipgloss.Left, searchInput, statusMessage)
 	} else {
 		statusBar = statusBarStyle.Render("\tq: quit | ctrl+f: search\t")
