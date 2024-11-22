@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -125,12 +125,14 @@ func (t *Tail) tail() {
 }
 
 func (t *Tail) readLastNLines() ([]Line, error) {
-	buffer := make([]byte, 1024*1024)
+	size := int(math.Pow(1024, 2))
+	buffer := make([]byte, size)
+
 	offset := t.fileSize
 	lineCount := 0
 	lines := make([]Line, 0, t.Config.Lines)
 
-	for lineCount < t.Config.Lines*2 && offset > 0 {
+	for offset > 0 && lineCount < t.Config.Lines {
 		readSize := int64(len(buffer))
 		if offset < readSize {
 			readSize = offset
@@ -150,7 +152,7 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 		for i := bytesRead - 1; i >= 0; i-- {
 			if buffer[i] == '\n' {
 				lineCount++
-				if lineCount > t.Config.Lines*2 {
+				if lineCount > t.Config.Lines {
 					offset += int64(i) + 1
 					break
 				}
@@ -165,17 +167,10 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 
 	scanner := bufio.NewScanner(t.file)
 	for scanner.Scan() && len(lines) < t.Config.Lines {
-		trimmedText := strings.TrimSpace(scanner.Text())
-		if trimmedText != "" {
-			lines = append(lines, Line{Text: trimmedText, Time: time.Now()})
-		}
+		lines = append(lines, Line{Text: scanner.Text(), Time: time.Now()})
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return lines, nil
+	return lines, scanner.Err()
 }
 
 func (t *Tail) readNewLines(reader *bufio.Reader) {
@@ -185,7 +180,7 @@ func (t *Tail) readNewLines(reader *bufio.Reader) {
 			if err == io.EOF {
 				break
 			}
-			// show error in info area
+			t.Lines <- Line{Error: err}
 			return
 		}
 		t.Lines <- Line{Text: line, Time: time.Now()}
