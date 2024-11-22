@@ -163,8 +163,12 @@ func (m *Model) updateContent() {
 			}
 		}
 
-		timestamp := timeStyle.Render(line.Time.Format("03:04:05 PM"))
-		content.WriteString(fmt.Sprintf("[%s] %s\n\n", timestamp, highlightedContent))
+		timestamp := fmt.Sprintf("%s%s%s",
+			bracketsStyle.Render("["),
+			timeStyle.Render(line.Time.Format("03:04:05 PM")),
+			bracketsStyle.Render("]"),
+		)
+		content.WriteString(fmt.Sprintf("%s %s\n", timestamp, highlightedContent))
 	}
 
 	m.logsView.SetContent(content.String())
