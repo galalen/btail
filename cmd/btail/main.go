@@ -3,7 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
+
+	"github.com/galalen/btail/pkg/config"
+	"github.com/galalen/btail/pkg/tail"
+	"github.com/galalen/btail/pkg/ui"
 )
 
 func main() {
@@ -17,16 +22,20 @@ func main() {
 	}
 	filename := flag.Args()[0]
 
-	config := Config{
-		Lines:  *lines,
-		Follow: *follow,
+	cfg := config.Config{
+		Lines:        *lines,
+		Follow:       *follow,
+		UIBufferSize: 500,
+		BufferSize:   500,
 	}
 
-	tail, err := TailFile(filename, config)
+	t, err := tail.TailFile(filename, cfg)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
 	}
 
-	runBtailApp(tail)
+	if err := ui.Run(t); err != nil {
+		log.Fatalf("Error running UI: %v", err)
+	}
 }

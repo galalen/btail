@@ -1,46 +1,43 @@
-package main
+package tail
 
 import (
 	"bufio"
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/galalen/btail/pkg/config"
 )
 
-type Config struct {
-	Lines  int
-	Follow bool
+type Line struct {
+	Text  string
+	Time  time.Time
+	Error error
 }
 
 type Tail struct {
 	Filename string
 	Lines    chan Line
-	Config   Config
+	Config   config.Config
 	file     *os.File
 	fileSize int64
 	watcher  *fsnotify.Watcher
 	done     chan struct{}
 }
 
-type Line struct {
-	Text string
-	Time time.Time
-}
-
-func TailFile(Filename string, config Config) (*Tail, error) {
-	if config.Lines <= 0 {
-		config.Lines = 10
+func TailFile(Filename string, cfg config.Config) (*Tail, error) {
+	if cfg.Lines <= 0 {
+		cfg.Lines = 10
 	}
 
 	t := &Tail{
 		Filename: Filename,
-		Lines:    make(chan Line),
-		Config:   config,
+		Lines:    make(chan Line, cfg.BufferSize),
+		Config:   cfg,
 		done:     make(chan struct{}),
 	}
 	var err error
@@ -49,7 +46,7 @@ func TailFile(Filename string, config Config) (*Tail, error) {
 		return nil, err
 	}
 
-	if config.Follow {
+	if cfg.Follow {
 		t.watcher, err = fsnotify.NewWatcher()
 		if err != nil {
 			t.file.Close()
@@ -112,7 +109,7 @@ func (t *Tail) tail() {
 
 	lines, err := t.readLastNLines()
 	if err != nil {
-		log.Printf("failed to read lines from file: %v", err)
+		log.Printf("failed to read Lines from file: %v", err)
 		return
 	}
 
@@ -128,12 +125,14 @@ func (t *Tail) tail() {
 }
 
 func (t *Tail) readLastNLines() ([]Line, error) {
-	buffer := make([]byte, 1024*1024)
+	size := int(math.Pow(1024, 2))
+	buffer := make([]byte, size)
+
 	offset := t.fileSize
 	lineCount := 0
 	lines := make([]Line, 0, t.Config.Lines)
 
-	for lineCount < t.Config.Lines*2 && offset > 0 {
+	for offset > 0 && lineCount < t.Config.Lines {
 		readSize := int64(len(buffer))
 		if offset < readSize {
 			readSize = offset
@@ -153,7 +152,7 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 		for i := bytesRead - 1; i >= 0; i-- {
 			if buffer[i] == '\n' {
 				lineCount++
-				if lineCount > t.Config.Lines*2 {
+				if lineCount > t.Config.Lines {
 					offset += int64(i) + 1
 					break
 				}
@@ -168,17 +167,10 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 
 	scanner := bufio.NewScanner(t.file)
 	for scanner.Scan() && len(lines) < t.Config.Lines {
-		trimmedText := strings.TrimSpace(scanner.Text())
-		if trimmedText != "" {
-			lines = append(lines, Line{Text: trimmedText, Time: time.Now()})
-		}
+		lines = append(lines, Line{Text: scanner.Text(), Time: time.Now()})
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return lines, nil
+	return lines, scanner.Err()
 }
 
 func (t *Tail) readNewLines(reader *bufio.Reader) {
@@ -188,10 +180,10 @@ func (t *Tail) readNewLines(reader *bufio.Reader) {
 			if err == io.EOF {
 				break
 			}
-			// show error in info area
+			t.Lines <- Line{Error: err}
 			return
 		}
-		t.Lines <- Line{line, time.Now()}
+		t.Lines <- Line{Text: line, Time: time.Now()}
 		t.fileSize += int64(len(line))
 	}
 }
