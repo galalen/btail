@@ -39,6 +39,8 @@ func NewModel(tailer *tail.Tail) *Model {
 
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
+	ti.PromptStyle = promptStyle
+	ti.TextStyle = inputTextStyle
 
 	return &Model{
 		tailer:        tailer,
@@ -55,7 +57,7 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -67,9 +69,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "ctrl+f":
-			return m.toggleSearch()
+			cmd := m.toggleSearch()
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		case "esc":
-			return m.exitSearch()
+			cmd := m.exitSearch()
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		case "up":
 			m.scrollUp()
 		case "down":
@@ -78,52 +86,64 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.scrollToTop()
 		case "end":
 			m.scrollToBottom()
+		case "c":
+			m.clearBuffer()
 		}
 	case tea.WindowSizeMsg:
-		return m.handleWindowResize(msg)
+		m.handleWindowResize(msg)
 	case tail.Line:
-		return m.handleNewLine(msg)
+		m.handleNewLine(msg)
+		cmds = append(cmds, m.tailFile())
 	case error:
 		// TODO: show error in status bar
-		return m, m.tailFile()
+		cmds = append(cmds, m.tailFile())
 	}
 
 	if m.state == StateSearching {
+		var cmd tea.Cmd
 		m.searchInput, cmd = m.searchInput.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 		m.searchTerm = m.searchInput.Value()
 		m.updateContent()
-		return m, cmd
 	}
 
 	m.updateScrollState()
+	var cmd tea.Cmd
 	m.logsView, cmd = m.logsView.Update(msg)
-	return m, cmd
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
-func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+func (m *Model) clearBuffer() {
+	m.bufferedLines = make([]tail.Line, 0, m.tailer.Config.UIBufferSize)
+	m.updateContent()
+}
+
+func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) {
 	m.width = msg.Width
 	m.height = msg.Height
 	m.logsView.Width = msg.Width - 4
 	m.logsView.Height = msg.Height - 6
 	m.searchInput.Width = msg.Width / 3
-	return m, nil
 }
 
-func (m *Model) handleNewLine(line tail.Line) (tea.Model, tea.Cmd) {
+func (m *Model) handleNewLine(line tail.Line) {
 	m.bufferedLines = append(m.bufferedLines, line)
 	if len(m.bufferedLines) > m.tailer.Config.UIBufferSize {
 		m.bufferedLines = m.bufferedLines[1:]
 	}
 	m.updateContent()
-	return m, m.tailFile()
 }
 
 func (m *Model) View() string {
-	title := titleStyle.Render("btail 🐝")
-
 	return lipgloss.JoinVertical(
 		lipgloss.Center,
-		title,
+		titleStyle.Render("btail 🐝"),
 		m.logsView.View(),
 		m.renderStatusBar(),
 	)
@@ -133,16 +153,18 @@ func (m *Model) renderStatusBar() string {
 	if m.state == StateSearching {
 		return m.renderSearchBar()
 	}
-	return statusBarStyle.Render("\tq: quit | ctrl+f: search\t")
+	return statusBarStyle.Render("\tq: quit | ctrl+f: search | c: clear\t")
 }
 
 func (m *Model) renderSearchBar() string {
-	searchInput := searchInputStyle.Render(m.searchInput.View())
-	bufferInfo := fmt.Sprintf("buffer: %d/%d", len(m.bufferedLines), m.tailer.Config.UIBufferSize)
-	statusMessage := statusMessageStyle.Render(
-		fmt.Sprintf("matches: %d | %s | esc: cancel", m.matchCount, bufferInfo),
+	matchInfo := statusMessageStyle.Render(fmt.Sprintf(" %d matches ", m.matchCount))
+	bufferInfo := fmt.Sprintf("%s | buffer: %d/%d | esc: cancel", matchInfo, len(m.bufferedLines), m.tailer.Config.UIBufferSize)
+
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		searchInputStyle.Render(" 🔍 "+m.searchInput.View()),
+		bufferInfo,
 	)
-	return lipgloss.JoinHorizontal(lipgloss.Left, searchInput, statusMessage)
 }
 
 func (m *Model) updateContent() {
@@ -199,7 +221,7 @@ func (m *Model) scrollToBottom() {
 	m.logsView.GotoBottom()
 }
 
-func (m *Model) toggleSearch() (tea.Model, tea.Cmd) {
+func (m *Model) toggleSearch() tea.Cmd {
 	if m.state == StateSearching {
 		return m.exitSearch()
 	}
@@ -210,10 +232,10 @@ func (m *Model) toggleSearch() (tea.Model, tea.Cmd) {
 	m.searchTerm = ""
 	m.matchCount = 0
 	m.updateContent()
-	return m, textinput.Blink
+	return textinput.Blink
 }
 
-func (m *Model) exitSearch() (tea.Model, tea.Cmd) {
+func (m *Model) exitSearch() tea.Cmd {
 	if m.state == StateSearching {
 		m.state = StateNormal
 		m.searchInput.Blur()
@@ -222,7 +244,7 @@ func (m *Model) exitSearch() (tea.Model, tea.Cmd) {
 		m.matchCount = 0
 		m.updateContent()
 	}
-	return m, nil
+	return nil
 }
 
 func (m *Model) tailFile() tea.Cmd {
