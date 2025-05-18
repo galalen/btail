@@ -85,7 +85,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "end":
 			m.scrollToBottom()
 		case "c":
-			m.clearBuffer()
+			if m.state != StateSearching {
+				m.clearBuffer()
+			}
 		}
 	case tea.WindowSizeMsg:
 		m.handleWindowResize(msg)
