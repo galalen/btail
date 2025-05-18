@@ -39,8 +39,6 @@ func NewModel(tailer *tail.Tail) *Model {
 
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
-	ti.PromptStyle = promptStyle
-	ti.TextStyle = inputTextStyle
 
 	return &Model{
 		tailer:        tailer,
@@ -162,7 +160,7 @@ func (m *Model) renderSearchBar() string {
 
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		searchInputStyle.Render(" 🔍 "+m.searchInput.View()),
+		searchInputStyle.Render(m.searchInput.View()),
 		bufferInfo,
 	)
 }
@@ -190,7 +188,7 @@ func (m *Model) updateContent() {
 			timeStyle.Render(line.Time.Format("03:04:05 PM")),
 			bracketsStyle.Render("]"),
 		)
-		content.WriteString(fmt.Sprintf("%s %s\n", timestamp, highlightedContent))
+		content.WriteString(fmt.Sprintf("%s %s", timestamp, highlightedContent))
 	}
 
 	m.logsView.SetContent(content.String())
@@ -201,11 +199,11 @@ func (m *Model) updateContent() {
 
 func (m *Model) scrollUp() {
 	m.autoScroll = false
-	m.logsView.LineUp(1)
+	m.logsView.ScrollUp(1)
 }
 
 func (m *Model) scrollDown() {
-	m.logsView.LineDown(1)
+	m.logsView.ScrollDown(1)
 	if m.logsView.AtBottom() {
 		m.autoScroll = true
 	}

@@ -167,7 +167,7 @@ func (t *Tail) readLastNLines() ([]Line, error) {
 
 	scanner := bufio.NewScanner(t.file)
 	for scanner.Scan() && len(lines) < t.Config.Lines {
-		lines = append(lines, Line{Text: scanner.Text(), Time: time.Now()})
+		lines = append(lines, Line{Text: scanner.Text() + "\n", Time: time.Now()})
 	}
 
 	return lines, scanner.Err()

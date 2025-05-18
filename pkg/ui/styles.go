@@ -36,19 +36,13 @@ var (
 			Foreground(subtleColor)
 
 	searchStyle = lipgloss.NewStyle().
-			Foreground(brightTextColor).
+			Foreground(verySubtleColor).
 			Background(secondaryColor).
 			Bold(true)
 
 	searchInputStyle = lipgloss.NewStyle().
-				Foreground(brightTextColor).
-				Background(secondaryColor)
-
-	promptStyle = lipgloss.NewStyle().
-			Foreground(secondaryColor)
-
-	inputTextStyle = lipgloss.NewStyle().
-			Foreground(brightTextColor)
+				Foreground(highlightColor).
+				Background(verySubtleColor)
 
 	statusMessageStyle = lipgloss.NewStyle().
 				Background(verySubtleColor).
