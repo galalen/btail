@@ -157,7 +157,7 @@ func (m *Model) renderStatusBar() string {
 }
 
 func (m *Model) renderSearchBar() string {
-	matchInfo := statusMessageStyle.Render(fmt.Sprintf(" %d matches ", m.matchCount))
+	matchInfo := matchInfoStyle.Render(fmt.Sprintf(" %d matches ", m.matchCount))
 	bufferInfo := fmt.Sprintf("%s | buffer: %d/%d | esc: cancel", matchInfo, len(m.bufferedLines), m.tailer.Config.UIBufferSize)
 
 	return lipgloss.JoinHorizontal(
@@ -181,7 +181,7 @@ func (m *Model) updateContent() {
 			)
 			m.matchCount += count
 			if count > 0 {
-				highlightedContent = highlightSearch(highlightedContent, m.searchTerm)
+				highlightedContent = highlightSearch(line.Text, m.searchTerm)
 			}
 		}
 

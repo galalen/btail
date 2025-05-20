@@ -7,75 +7,67 @@ import (
 )
 
 var (
-	primaryColor    = lipgloss.Color("39")  // Blue
-	secondaryColor  = lipgloss.Color("205") // Pink
-	highlightColor  = lipgloss.Color("228") // Yellow
-	warningColor    = lipgloss.Color("208") // Orange
-	errorColor      = lipgloss.Color("196") // Red
-	infoColor       = lipgloss.Color("69")  // Teal
-	subtleColor     = lipgloss.Color("244") // Light gray
-	verySubtleColor = lipgloss.Color("237") // Darker gray
-	backgroundColor = lipgloss.Color("235") // Very dark gray
-	textColor       = lipgloss.Color("252") // Almost white
-	brightTextColor = lipgloss.Color("255") // White
+	blueColor       = lipgloss.Color("#00afd7")
+	pinkColor       = lipgloss.Color("#ff5faf")
+	yellowColor     = lipgloss.Color("#ffff87")
+	orangeColor     = lipgloss.Color("#ff8700")
+	redColor        = lipgloss.Color("#ff0000")
+	tealColor       = lipgloss.Color("#5f87ff")
+	lightGrayColor  = lipgloss.Color("#D3D3D3")
+	darkerGrayColor = lipgloss.Color("#3a3a3a")
+	silverColor     = lipgloss.Color("#1b1b1b")
+	greenColor      = lipgloss.Color("#00ff00")
+	lightGreenColor = lipgloss.Color("#90ee90")
 
 	baseStyle = lipgloss.NewStyle().
 			Margin(0).
 			Padding(0).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(subtleColor)
+			BorderForeground(darkerGrayColor)
 
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(highlightColor).
-			Background(verySubtleColor).
+			Foreground(yellowColor).
 			Padding(0, 1)
 
 	statusBarStyle = lipgloss.NewStyle().
-			Background(verySubtleColor).
-			Foreground(subtleColor)
-
-	searchStyle = lipgloss.NewStyle().
-			Foreground(verySubtleColor).
-			Background(secondaryColor).
-			Bold(true)
+			Bold(false).
+			Foreground(pinkColor).
+			Background(silverColor)
 
 	searchInputStyle = lipgloss.NewStyle().
-				Foreground(highlightColor).
-				Background(verySubtleColor)
+				Foreground(pinkColor)
 
-	statusMessageStyle = lipgloss.NewStyle().
-				Background(verySubtleColor).
-				Foreground(highlightColor)
+	matchInfoStyle = lipgloss.NewStyle().
+			Foreground(pinkColor)
+
+	searchMatchStyle = lipgloss.NewStyle().
+				Foreground(darkerGrayColor).
+				Background(pinkColor).
+				Bold(true)
 
 	timeStyle = lipgloss.NewStyle().
-			Foreground(subtleColor)
+			Foreground(lightGreenColor)
 
 	ipStyle = lipgloss.NewStyle().
-		Background(primaryColor).
-		Foreground(brightTextColor)
+		Foreground(blueColor)
 
 	urlStyle = lipgloss.NewStyle().
-			Foreground(infoColor).
+			Foreground(tealColor).
 			Underline(true)
 
 	methodStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(highlightColor)
-
-	filePathStyle = lipgloss.NewStyle().
-			Foreground(subtleColor).
-			Italic(true)
+			Foreground(yellowColor)
 
 	bracketsStyle = lipgloss.NewStyle().
-			Foreground(highlightColor)
+			Foreground(yellowColor)
 
-	ipRegex       = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(:\d{1,5})?\b`)
-	urlRegex      = regexp.MustCompile(`\b(?:https?|ftp|rtmp|smtp)://\S+`)
-	filePathRegex = regexp.MustCompile(`\b[A-Za-z]:\\\S+|\b/[^\s:]+`)
-	methodRegex   = regexp.MustCompile(`\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b`)
-	errorRegex    = regexp.MustCompile(`(?i)\b(error|exception|failed|failure|timeout|denied)\b`)
-	warningRegex  = regexp.MustCompile(`(?i)\b(warning|warn|deprecated)\b`)
+	ipRegex      = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(:\d{1,5})?\b`)
+	urlRegex     = regexp.MustCompile(`\b(?:https?|ftp|rtmp|smtp)://\S+`)
+	methodRegex  = regexp.MustCompile(`\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b`)
+	errorRegex   = regexp.MustCompile(`(?i)\b(error|exception|failed|failure|timeout|denied)\b`)
+	warningRegex = regexp.MustCompile(`(?i)\b(warning|warn|deprecated)\b`)
 )
 
 func highlightPatterns(text string) string {
@@ -87,20 +79,16 @@ func highlightPatterns(text string) string {
 		return urlStyle.Render(url)
 	})
 
-	text = filePathRegex.ReplaceAllStringFunc(text, func(path string) string {
-		return filePathStyle.Render(path)
-	})
-
 	text = methodRegex.ReplaceAllStringFunc(text, func(method string) string {
 		return methodStyle.Render(method)
 	})
 
 	text = errorRegex.ReplaceAllStringFunc(text, func(match string) string {
-		return lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render(match)
+		return lipgloss.NewStyle().Foreground(redColor).Bold(true).Render(match)
 	})
 
 	text = warningRegex.ReplaceAllStringFunc(text, func(match string) string {
-		return lipgloss.NewStyle().Foreground(warningColor).Render(match)
+		return lipgloss.NewStyle().Foreground(orangeColor).Render(match)
 	})
 
 	return text
@@ -113,6 +101,6 @@ func highlightSearch(content, term string) string {
 
 	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
 	return re.ReplaceAllStringFunc(content, func(match string) string {
-		return searchStyle.Render(match)
+		return searchMatchStyle.Render(match)
 	})
 }
