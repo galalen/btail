@@ -127,7 +127,7 @@ func (m *Model) clearBuffer() {
 func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) {
 	m.width = msg.Width
 	m.height = msg.Height
-	m.logsView.Width = msg.Width - 4
+	m.logsView.Width = msg.Width
 	m.logsView.Height = msg.Height - 6
 	m.searchInput.Width = msg.Width / 3
 }
@@ -190,7 +190,8 @@ func (m *Model) updateContent() {
 			timeStyle.Render(line.Time.Format("03:04:05 PM")),
 			bracketsStyle.Render("]"),
 		)
-		content.WriteString(fmt.Sprintf("%s %s", timestamp, highlightedContent))
+		logLine := lipgloss.NewStyle().Width(m.logsView.Width).Render(fmt.Sprintf("%s %s", timestamp, highlightedContent))
+		content.WriteString(logLine + "\n")
 	}
 
 	m.logsView.SetContent(content.String())
