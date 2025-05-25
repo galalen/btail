@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -183,7 +184,7 @@ func (t *Tail) readNewLines(reader *bufio.Reader) {
 			t.Lines <- Line{Error: err}
 			return
 		}
-		t.Lines <- Line{Text: line, Time: time.Now()}
+		t.Lines <- Line{Text: strings.TrimSuffix(line, "\n"), Time: time.Now()}
 		t.fileSize += int64(len(line))
 	}
 }
