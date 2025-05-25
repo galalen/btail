@@ -149,16 +149,20 @@ func (m *Model) View() string {
 	)
 }
 
+func (m *Model) renderBufferInfo() string {
+	return fmt.Sprintf("buffer: %d/%d", len(m.bufferedLines), m.tailer.Config.UIBufferSize)
+}
+
 func (m *Model) renderStatusBar() string {
 	if m.state == StateSearching {
 		return m.renderSearchBar()
 	}
-	return statusBarStyle.Render("\tq: quit | ctrl+f: search | c: clear\t")
+	return statusBarStyle.Render(fmt.Sprintf("\t%s | ctrl+f: search | c: clear | q: quit\t", m.renderBufferInfo()))
 }
 
 func (m *Model) renderSearchBar() string {
 	matchInfo := matchInfoStyle.Render(fmt.Sprintf(" %d matches ", m.matchCount))
-	bufferInfo := fmt.Sprintf("%s | buffer: %d/%d | esc: cancel", matchInfo, len(m.bufferedLines), m.tailer.Config.UIBufferSize)
+	bufferInfo := fmt.Sprintf("%s | %s | esc: cancel", matchInfo, m.renderBufferInfo())
 
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
