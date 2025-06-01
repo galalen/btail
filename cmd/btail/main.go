@@ -6,9 +6,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/galalen/btail/pkg/app"
 	"github.com/galalen/btail/pkg/config"
 	"github.com/galalen/btail/pkg/tail"
-	"github.com/galalen/btail/pkg/ui"
 )
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := ui.Run(t); err != nil {
+	if err := app.Run(t); err != nil {
 		log.Fatalf("Error running UI: %v", err)
 	}
 }

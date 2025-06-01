@@ -1,4 +1,4 @@
-package ui
+package app
 
 import (
 	"regexp"
@@ -38,7 +38,7 @@ var (
 	searchInputStyle = lipgloss.NewStyle().
 				Foreground(pinkColor)
 
-	matchInfoStyle = lipgloss.NewStyle().
+	pinkStyle = lipgloss.NewStyle().
 			Foreground(pinkColor)
 
 	searchMatchStyle = lipgloss.NewStyle().
@@ -62,6 +62,9 @@ var (
 
 	bracketsStyle = lipgloss.NewStyle().
 			Foreground(yellowColor)
+
+	searchModeStyle = lipgloss.NewStyle().
+			Foreground(lightGreenColor)
 
 	ipRegex      = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(:\d{1,5})?\b`)
 	urlRegex     = regexp.MustCompile(`\b(?:https?|ftp|rtmp|smtp)://\S+`)
@@ -92,15 +95,4 @@ func highlightPatterns(text string) string {
 	})
 
 	return text
-}
-
-func highlightSearch(content, term string) string {
-	if term == "" {
-		return content
-	}
-
-	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
-	return re.ReplaceAllStringFunc(content, func(match string) string {
-		return searchMatchStyle.Render(match)
-	})
 }
