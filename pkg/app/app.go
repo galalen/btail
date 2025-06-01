@@ -1,7 +1,8 @@
-package ui
+package app
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,10 +14,15 @@ import (
 )
 
 type State int
+type SearchMode string
 
 const (
 	StateNormal State = iota
 	StateSearching
+	SearchModeNormal SearchMode = "normal"
+	SearchModeRegex  SearchMode = "regex"
+	viewportWidth               = 80
+	viewportHeight              = 20
 )
 
 type Model struct {
@@ -25,26 +31,29 @@ type Model struct {
 	searchInput   textinput.Model
 	bufferedLines []tail.Line
 	state         State
+	searchMode    SearchMode
+	compiledRegex *regexp.Regexp
+	searchTerm    string
 	width         int
 	height        int
-	searchTerm    string
 	matchCount    int
-	autoScroll    bool
 	lastScrollPos int
+	autoScroll    bool
 }
 
 func NewModel(tailer *tail.Tail) *Model {
-	vp := viewport.New(80, 20)
+	vp := viewport.New(viewportWidth, viewportHeight)
 	vp.Style = baseStyle
 
 	ti := textinput.New()
-	ti.Placeholder = "Search..."
+	ti.Placeholder = "search..."
 
 	return &Model{
 		tailer:        tailer,
 		logsView:      vp,
 		searchInput:   ti,
 		state:         StateNormal,
+		searchMode:    SearchModeNormal,
 		autoScroll:    true,
 		bufferedLines: make([]tail.Line, 0, tailer.Config.UIBufferSize),
 	}
@@ -67,7 +76,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "ctrl+f":
-			cmd := m.toggleSearch()
+			m.searchInput.Placeholder = "search..."
+			cmd := m.toggleSearch(SearchModeNormal)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		case "ctrl+r":
+			m.searchInput.Placeholder = "pattern..."
+			cmd := m.toggleSearch(SearchModeRegex)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
@@ -106,6 +122,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		m.searchTerm = m.searchInput.Value()
+		if m.searchMode == SearchModeRegex {
+			if m.searchTerm != "" {
+				m.compiledRegex, _ = regexp.Compile(m.searchTerm)
+			}
+		} else {
+			m.compiledRegex = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(m.searchTerm))
+		}
 		m.updateContent()
 	}
 
@@ -157,18 +180,31 @@ func (m *Model) renderStatusBar() string {
 	if m.state == StateSearching {
 		return m.renderSearchBar()
 	}
-	return statusBarStyle.Render(fmt.Sprintf("\t%s | ctrl+f: search | c: clear | q: quit\t", m.renderBufferInfo()))
+	return statusBarStyle.Render(fmt.Sprintf("\t%s | ctrl+f: search | ctrl+r: regex | c: clear | q: quit\t", m.renderBufferInfo()))
+}
+
+func (m *Model) renderSearchMode() string {
+	return searchModeStyle.Render(fmt.Sprintf("mode: %s", m.searchMode))
 }
 
 func (m *Model) renderSearchBar() string {
-	matchInfo := matchInfoStyle.Render(fmt.Sprintf(" %d matches ", m.matchCount))
-	bufferInfo := fmt.Sprintf("%s | %s | esc: cancel", matchInfo, m.renderBufferInfo())
-
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
 		searchInputStyle.Render(m.searchInput.View()),
-		bufferInfo,
+		pinkStyle.Render(fmt.Sprintf(" %d matches | ", m.matchCount)),
+		m.renderSearchMode(),
+		pinkStyle.Render(fmt.Sprintf(" | %s | esc: cancel", m.renderBufferInfo())),
 	)
+}
+
+func (m *Model) highlightSearch(content string) string {
+	if m.compiledRegex == nil {
+		return content
+	}
+
+	return m.compiledRegex.ReplaceAllStringFunc(content, func(match string) string {
+		return searchMatchStyle.Render(match)
+	})
 }
 
 func (m *Model) updateContent() {
@@ -178,14 +214,21 @@ func (m *Model) updateContent() {
 	for _, line := range m.bufferedLines {
 		highlightedContent := highlightPatterns(line.Text)
 
-		if m.searchTerm != "" {
-			count := strings.Count(
-				strings.ToLower(line.Text),
-				strings.ToLower(m.searchTerm),
-			)
-			m.matchCount += count
-			if count > 0 {
-				highlightedContent = highlightSearch(line.Text, m.searchTerm)
+		if m.searchMode == SearchModeNormal {
+			if m.searchTerm != "" {
+				count := strings.Count(strings.ToLower(line.Text), strings.ToLower(m.searchTerm))
+				if count > 0 {
+					m.matchCount += count
+					highlightedContent = m.highlightSearch(line.Text)
+				}
+			}
+		} else {
+			if m.compiledRegex != nil {
+				count := len(m.compiledRegex.FindAllStringIndex(line.Text, -1))
+				if count > 0 {
+					m.matchCount += count
+					highlightedContent = m.highlightSearch(line.Text)
+				}
 			}
 		}
 
@@ -226,15 +269,17 @@ func (m *Model) scrollToBottom() {
 	m.logsView.GotoBottom()
 }
 
-func (m *Model) toggleSearch() tea.Cmd {
+func (m *Model) toggleSearch(searchMode SearchMode) tea.Cmd {
 	if m.state == StateSearching {
 		return m.exitSearch()
 	}
 
 	m.state = StateSearching
+	m.searchMode = searchMode
 	m.searchInput.Focus()
 	m.searchInput.SetValue("")
 	m.searchTerm = ""
+	m.compiledRegex = nil
 	m.matchCount = 0
 	m.updateContent()
 	return textinput.Blink
@@ -246,6 +291,7 @@ func (m *Model) exitSearch() tea.Cmd {
 		m.searchInput.Blur()
 		m.searchInput.SetValue("")
 		m.searchTerm = ""
+		m.compiledRegex = nil
 		m.matchCount = 0
 		m.updateContent()
 	}
