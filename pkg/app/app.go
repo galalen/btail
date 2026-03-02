@@ -33,17 +33,20 @@ type Model struct {
 	state         State
 	searchMode    SearchMode
 	compiledRegex *regexp.Regexp
+	searchErr     error
 	searchTerm    string
 	width         int
 	height        int
 	matchCount    int
 	lastScrollPos int
 	autoScroll    bool
+	wrapLines     bool
 }
 
 func NewModel(tailer *tail.Tail) *Model {
 	vp := viewport.New(viewportWidth, viewportHeight)
 	vp.Style = baseStyle
+	vp.SetHorizontalStep(4)
 
 	ti := textinput.New()
 	ti.Placeholder = "search..."
@@ -55,6 +58,7 @@ func NewModel(tailer *tail.Tail) *Model {
 		state:         StateNormal,
 		searchMode:    SearchModeNormal,
 		autoScroll:    true,
+		wrapLines:     true,
 		bufferedLines: make([]tail.Line, 0, tailer.Config.UIBufferSize),
 	}
 }
@@ -92,10 +96,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
+		case "w":
+			if m.state != StateSearching {
+				m.wrapLines = !m.wrapLines
+				if m.wrapLines {
+					m.logsView.SetXOffset(0)
+				}
+				m.updateContent()
+			}
 		case "up":
 			m.scrollUp()
 		case "down":
 			m.scrollDown()
+		case "left":
+			if !m.wrapLines {
+				m.logsView.ScrollLeft(4)
+			}
+		case "right":
+			if !m.wrapLines {
+				m.logsView.ScrollRight(4)
+			}
 		case "home":
 			m.scrollToTop()
 		case "end":
@@ -124,10 +144,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchTerm = m.searchInput.Value()
 		if m.searchMode == SearchModeRegex {
 			if m.searchTerm != "" {
-				m.compiledRegex, _ = regexp.Compile(m.searchTerm)
+				var err error
+				m.compiledRegex, err = regexp.Compile(m.searchTerm)
+				m.searchErr = err
+				if err != nil {
+					m.compiledRegex = nil
+				}
+			} else {
+				m.searchErr = nil
 			}
 		} else {
 			m.compiledRegex = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(m.searchTerm))
+			m.searchErr = nil
 		}
 		m.updateContent()
 	}
@@ -180,7 +208,11 @@ func (m *Model) renderStatusBar() string {
 	if m.state == StateSearching {
 		return m.renderSearchBar()
 	}
-	return statusBarStyle.Render(fmt.Sprintf("\t%s | ctrl+f: search | ctrl+r: regex | c: clear | q: quit\t", m.renderBufferInfo()))
+	wrapMode := "wrap"
+	if !m.wrapLines {
+		wrapMode = "hscroll"
+	}
+	return statusBarStyle.Render(fmt.Sprintf("\t%s | %s | ctrl+f: search | ctrl+r: regex | w: wrap | left/right: scroll | c: clear | q: quit\t", m.renderBufferInfo(), wrapMode))
 }
 
 func (m *Model) renderSearchMode() string {
@@ -188,12 +220,16 @@ func (m *Model) renderSearchMode() string {
 }
 
 func (m *Model) renderSearchBar() string {
+	errText := ""
+	if m.searchErr != nil {
+		errText = fmt.Sprintf(" | %s", m.searchErr.Error())
+	}
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
 		searchInputStyle.Render(m.searchInput.View()),
 		pinkStyle.Render(fmt.Sprintf(" %d matches | ", m.matchCount)),
 		m.renderSearchMode(),
-		pinkStyle.Render(fmt.Sprintf(" | %s | esc: cancel", m.renderBufferInfo())),
+		pinkStyle.Render(fmt.Sprintf(" | %s | esc: cancel%s", m.renderBufferInfo(), errText)),
 	)
 }
 
@@ -237,7 +273,11 @@ func (m *Model) updateContent() {
 			timeStyle.Render(line.Time.Format("03:04:05 PM")),
 			bracketsStyle.Render("]"),
 		)
-		logLine := lipgloss.NewStyle().Width(m.logsView.Width).Render(fmt.Sprintf("%s %s", timestamp, highlightedContent))
+		rawLine := fmt.Sprintf("%s %s", timestamp, highlightedContent)
+		logLine := rawLine
+		if m.wrapLines && m.logsView.Width > 0 {
+			logLine = lipgloss.NewStyle().Width(m.logsView.Width).Render(rawLine)
+		}
 		content.WriteString(logLine + "\n")
 	}
 
@@ -280,6 +320,7 @@ func (m *Model) toggleSearch(searchMode SearchMode) tea.Cmd {
 	m.searchInput.SetValue("")
 	m.searchTerm = ""
 	m.compiledRegex = nil
+	m.searchErr = nil
 	m.matchCount = 0
 	m.updateContent()
 	return textinput.Blink
@@ -292,6 +333,7 @@ func (m *Model) exitSearch() tea.Cmd {
 		m.searchInput.SetValue("")
 		m.searchTerm = ""
 		m.compiledRegex = nil
+		m.searchErr = nil
 		m.matchCount = 0
 		m.updateContent()
 	}
